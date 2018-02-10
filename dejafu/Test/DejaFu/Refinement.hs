@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
@@ -11,7 +10,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : FlexibleContexts, FlexibleInstances, GADTs, MultiWayIf, TupleSections, TypeFamilies
+-- Portability : FlexibleContexts, FlexibleInstances, GADTs, MultiWayIf, TypeFamilies
 --
 -- Properties about the side-effects of concurrent functions on some
 -- shared state.
@@ -347,7 +346,7 @@ counterExamples :: (Testable p, Listable (X p))
 counterExamples sn vn p = do
   let seeds = take sn $ concat tiers
   let cases = take vn $ concat (rpropTiers p)
-  rs <- mapM (\(vs, p') -> (vs,) <$> checkWithSeeds seeds p') cases
+  rs <- mapM (\(vs, p') -> (\cf -> (vs, cf)) <$> checkWithSeeds seeds p') cases
   pure [ cf vs | (vs, Just cf) <- rs ]
 
 

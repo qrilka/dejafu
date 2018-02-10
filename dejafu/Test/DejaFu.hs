@@ -1,6 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TupleSections #-}
 
 {- |
 Module      : Test.DejaFu
@@ -8,7 +7,7 @@ Copyright   : (c) 2015--2017 Michael Walker
 License     : MIT
 Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 Stability   : experimental
-Portability : LambdaCase, MultiParamTypeClasses, TupleSections
+Portability : LambdaCase, MultiParamTypeClasses
 
 dejafu is a library for unit-testing concurrent Haskell programs,
 written using the [concurrency](https://hackage.haskell.org/package/concurrency)
@@ -888,7 +887,7 @@ alwaysNothing :: (Either Failure a -> Maybe (Either Failure b)) -> ProPredicate 
 alwaysNothing f = ProPredicate
   { pdiscard = maybe (Just DiscardResultAndTrace) (const Nothing) . f
   , peval = \xs ->
-      let failures = mapMaybe (\(efa,trc) -> (,trc) <$> f efa) xs
+      let failures = mapMaybe (\(efa,trc) -> (\efa' -> (efa', trc)) <$> f efa) xs
       in Result (null failures) failures ""
   }
 
@@ -907,7 +906,7 @@ somewhereNothing :: (Either Failure a -> Maybe (Either Failure b)) -> ProPredica
 somewhereNothing f = ProPredicate
   { pdiscard = maybe (Just DiscardTrace) (const Nothing) . f
   , peval = \xs ->
-      let failures = map (\(efa,trc) -> (,trc) <$> f efa) xs
+      let failures = map (\(efa,trc) -> (\efa' -> (efa', trc)) <$> f efa) xs
       in Result (any isNothing failures) (catMaybes failures) ""
   }
 

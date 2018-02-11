@@ -37,7 +37,7 @@ before_install:
 - rm stack.yaml
 - if [[ -e .travis/$RESOLVER.yaml ]]; then mv .travis/$RESOLVER.yaml stack.yaml; else stack init --resolver=$RESOLVER; fi
 - stack --no-terminal setup
-- if [[ "$MODE" == "style" ]]; then stack --no-terminal install stylish-haskell; fi
+- if [[ "$MODE" == "style" ]]; then stack --no-terminal install brittany stylish-haskell; fi
 - if [[ "$MODE" == "doctest" ]]; then stack --no-terminal install doctest; fi
 
 # Run tests

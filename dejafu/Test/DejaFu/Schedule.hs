@@ -59,10 +59,12 @@ newtype Scheduler state = Scheduler
 --
 -- @since 0.8.0.0
 randomSched :: RandomGen g => Scheduler g
-randomSched = Scheduler go where
+randomSched = Scheduler go
+ where
   go _ threads g =
-    let threads' = map fst (toList threads)
-        (choice, g') = randomR (0, length threads' - 1) g
+    let
+      threads' = map fst (toList threads)
+      (choice, g') = randomR (0, length threads' - 1) g
     in (Just $ eidx "randomSched" threads' choice, g')
 
 -- | A round-robin scheduler which, at every step, schedules the
@@ -70,14 +72,15 @@ randomSched = Scheduler go where
 --
 -- @since 0.8.0.0
 roundRobinSched :: Scheduler ()
-roundRobinSched = Scheduler go where
-  go Nothing ((tid,_):|_) _ = (Just tid, ())
+roundRobinSched = Scheduler go
+ where
+  go Nothing ((tid, _):|_) _ = (Just tid, ())
   go (Just (prior, _)) threads _ =
-    let threads' = map fst (toList threads)
-        candidates =
-          if prior >= maximum threads'
-          then threads'
-          else filter (>prior) threads'
+    let
+      threads' = map fst (toList threads)
+      candidates = if prior >= maximum threads'
+        then threads'
+        else filter (> prior) threads'
     in (Just (minimum candidates), ())
 
 -------------------------------------------------------------------------------
@@ -108,7 +111,8 @@ roundRobinSchedNP = makeNonPreemptive roundRobinSched
 --
 -- @since 0.8.0.0
 makeNonPreemptive :: Scheduler s -> Scheduler s
-makeNonPreemptive sched = Scheduler newsched where
+makeNonPreemptive sched = Scheduler newsched
+ where
   newsched p@(Just (prior, _)) threads s
     | prior `elem` map fst (toList threads) = (Just prior, s)
     | otherwise = scheduleThread sched p threads s

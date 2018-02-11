@@ -178,10 +178,19 @@ instance Monad n => C.MonadConc (ConcT r n) where
   atomically = toConc . AAtom
 
 -- move this into the instance defn when forkOSWithUnmaskN is added to MonadConc in 2018
-forkOSWithUnmaskN :: Applicative n => String -> ((forall a. ConcT r n a -> ConcT r n a) -> ConcT r n ()) -> ConcT r n ThreadId
+forkOSWithUnmaskN
+  :: Applicative n
+  => String
+  -> ((forall a . ConcT r n a -> ConcT r n a) -> ConcT r n ())
+  -> ConcT r n ThreadId
 forkOSWithUnmaskN n ma
-  | C.rtsSupportsBoundThreads = toConc (AForkOS n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
-  | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
+  | C.rtsSupportsBoundThreads = toConc
+    ( AForkOS
+      n
+      (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ())))
+    )
+  | otherwise = fail
+    "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
@@ -207,14 +216,21 @@ forkOSWithUnmaskN n ma
 -- be halted.
 --
 -- @since 1.0.0.0
-runConcurrent :: (C.MonadConc n, MonadRef r n)
+runConcurrent
+  :: (C.MonadConc n, MonadRef r n)
   => Scheduler s
   -> MemType
   -> s
   -> ConcT r n a
   -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
-  (res, ctx, trace, _) <- runConcurrency sched memtype s initialIdSource 2 (unC ma)
+  (res, ctx, trace, _) <- runConcurrency
+    sched
+    memtype
+    s
+    initialIdSource
+    2
+    (unC ma)
   pure (res, cSchedState ctx, F.toList trace)
 
 -- | Run a concurrent computation and return its result.

@@ -99,10 +99,7 @@ instance IsTest (Conc.ConcIO (Maybe String)) where
     run options (ConcTest traces (peval assertableP)) callback
 
 concOptions :: [OptionDescription]
-concOptions =
-  [ Option (Proxy :: Proxy MemType)
-  , Option (Proxy :: Proxy Way)
-  ]
+concOptions = [Option (Proxy :: Proxy MemType), Option (Proxy :: Proxy Way)]
 
 assertableP :: Predicate (Maybe String)
 assertableP = alwaysTrue $ \case
@@ -138,7 +135,8 @@ instance IsOption Way where
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
 -- @since 1.0.0.0
-testAuto :: (Eq a, Show a)
+testAuto
+  :: (Eq a, Show a)
   => Conc.ConcIO a
   -- ^ The computation to test.
   -> TestTree
@@ -148,7 +146,8 @@ testAuto = testAutoWay defaultWay defaultMemType
 -- execution way and memory model.
 --
 -- @since 1.0.0.0
-testAutoWay :: (Eq a, Show a)
+testAutoWay
+  :: (Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -161,7 +160,7 @@ testAutoWay way memtype = testDejafusWay way memtype autocheckCases
 -- | Predicates for the various autocheck functions.
 autocheckCases :: Eq a => [(TestName, Predicate a)]
 autocheckCases =
-  [("Never Deadlocks", representative deadlocksNever)
+  [ ("Never Deadlocks", representative deadlocksNever)
   , ("No Exceptions", representative exceptionsNever)
   , ("Consistent Result", alwaysSame)
   ]
@@ -169,7 +168,8 @@ autocheckCases =
 -- | Check that a predicate holds.
 --
 -- @since 1.0.0.0
-testDejafu :: Show b
+testDejafu
+  :: Show b
   => TestName
   -- ^ The name of the test.
   -> ProPredicate a b
@@ -183,7 +183,8 @@ testDejafu = testDejafuWay defaultWay defaultMemType
 -- and a memory model.
 --
 -- @since 1.0.0.0
-testDejafuWay :: Show b
+testDejafuWay
+  :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -200,7 +201,8 @@ testDejafuWay = testDejafuDiscard (const Nothing)
 -- | Variant of 'testDejafuWay' which can selectively discard results.
 --
 -- @since 1.0.0.0
-testDejafuDiscard :: Show b
+testDejafuDiscard
+  :: Show b
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
@@ -222,7 +224,8 @@ testDejafuDiscard discard way memtype name test =
 -- running the concurrent computation many times for each predicate.
 --
 -- @since 1.0.0.0
-testDejafus :: Show b
+testDejafus
+  :: Show b
   => [(TestName, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
   -> Conc.ConcIO a
@@ -234,7 +237,8 @@ testDejafus = testDejafusWay defaultWay defaultMemType
 -- and a memory model.
 --
 -- @since 1.0.0.0
-testDejafusWay :: Show b
+testDejafusWay
+  :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -254,7 +258,8 @@ testDejafusWay = testconc (const Nothing)
 -- variable assignments.
 --
 -- @since 0.6.0.0
-testProperty :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+testProperty
+  :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
   => TestName
   -- ^ The name of the test.
   -> p
@@ -268,7 +273,8 @@ testProperty = testPropertyFor 10 100
 -- @n * m@.
 --
 -- @since 0.7.1.0
-testPropertyFor :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+testPropertyFor
+  :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
   => Int
   -- ^ The number of seed values to try.
   -> Int
@@ -316,7 +322,8 @@ instance IsTest PropTest where
       Nothing -> testPassed ""
 
 -- | Produce a Tasty 'Test' from a Deja Fu unit test.
-testconc :: Show b
+testconc
+  :: Show b
   => (Either Failure a -> Maybe Discard)
   -> Way
   -> MemType
@@ -325,17 +332,22 @@ testconc :: Show b
   -> TestTree
 testconc discard way memtype tests concio = case map toTest tests of
   [t] -> t
-  ts  -> testGroup "Deja Fu Tests" ts
-
-  where
-    toTest (name, p) =
-      let discarder = D.strengthenDiscard discard (pdiscard p)
-          traces    = SCT.runSCTDiscard discarder way memtype concio
-      in singleTest name $ ConcTest traces (peval p)
+  ts -> testGroup "Deja Fu Tests" ts
+ where
+  toTest (name, p) =
+    let
+      discarder = D.strengthenDiscard discard (pdiscard p)
+      traces = SCT.runSCTDiscard discarder way memtype concio
+    in singleTest name $ ConcTest traces (peval p)
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu refinement property test.
-testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
-  => Int -> Int -> TestName -> p -> TestTree
+testprop
+  :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+  => Int
+  -> Int
+  -> TestName
+  -> p
+  -> TestTree
 testprop sn vn name = singleTest name . PropTest sn vn
 
 -- | Convert a test result into an error message on failure (empty
@@ -343,20 +355,28 @@ testprop sn vn name = singleTest name . PropTest sn vn
 showErr :: Show a => Result a -> String
 showErr res
   | _pass res = ""
-  | otherwise = "Failed:\n" ++ msg ++ unlines failures ++ rest where
+  | otherwise = "Failed:\n" ++ msg ++ unlines failures ++ rest
+ where
 
   msg = if null (_failureMsg res) then "" else _failureMsg res ++ "\n"
 
-  failures = intersperse "" . map (\(r, t) -> indent $ either Conc.showFail show r ++ " " ++ Conc.showTrace t) . take 5 $ _failures res
+  failures =
+    intersperse ""
+      . map
+          ( \(r, t) ->
+            indent $ either Conc.showFail show r ++ " " ++ Conc.showTrace t
+          )
+      . take 5
+      $ _failures res
 
   rest = if moreThan (_failures res) 5 then "\n\t..." else ""
 
 -- | Check if a list has more than some number of elements.
 moreThan :: [a] -> Int -> Bool
 moreThan [] n = n < 0
-moreThan _ 0  = True
-moreThan (_:xs) n = moreThan xs (n-1)
+moreThan _ 0 = True
+moreThan (_:xs) n = moreThan xs (n - 1)
 
 -- | Indent every line of a string.
 indent :: String -> String
-indent = intercalate "\n" . map ('\t':) . lines
+indent = intercalate "\n" . map ('\t' :) . lines

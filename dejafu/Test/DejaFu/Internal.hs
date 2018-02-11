@@ -42,30 +42,39 @@ instance NFData IdSource where
 -- | Get the next free 'CRefId'.
 nextCRId :: String -> IdSource -> (IdSource, CRefId)
 nextCRId name idsource =
-  let (crid, crids') = nextId name (_crids idsource)
-  in (idsource { _crids = crids' }, CRefId crid)
+  let
+    (crid, crids') = nextId name (_crids idsource)
+  in
+    (idsource { _crids = crids' }, CRefId crid)
 
 -- | Get the next free 'MVarId'.
 nextMVId :: String -> IdSource -> (IdSource, MVarId)
 nextMVId name idsource =
-  let (mvid, mvids') = nextId name (_mvids idsource)
-  in (idsource { _mvids = mvids' }, MVarId mvid)
+  let
+    (mvid, mvids') = nextId name (_mvids idsource)
+  in
+    (idsource { _mvids = mvids' }, MVarId mvid)
 
 -- | Get the next free 'TVarId'.
 nextTVId :: String -> IdSource -> (IdSource, TVarId)
 nextTVId name idsource =
-  let (tvid, tvids') = nextId name (_tvids idsource)
-  in (idsource { _tvids = tvids' }, TVarId tvid)
+  let
+    (tvid, tvids') = nextId name (_tvids idsource)
+  in
+    (idsource { _tvids = tvids' }, TVarId tvid)
 
 -- | Get the next free 'ThreadId'.
 nextTId :: String -> IdSource -> (IdSource, ThreadId)
 nextTId name idsource =
-  let (tid, tids') = nextId name (_tids idsource)
-  in (idsource { _tids = tids' }, ThreadId tid)
+  let
+    (tid, tids') = nextId name (_tids idsource)
+  in
+    (idsource { _tids = tids' }, ThreadId tid)
 
 -- | Helper for @next*@
 nextId :: String -> (Int, [String]) -> (Id, (Int, [String]))
-nextId name (num, used) = (Id newName (num+1), (num+1, newUsed)) where
+nextId name (num, used) = (Id newName (num + 1), (num + 1, newUsed))
+ where
   newName
     | null name = Nothing
     | occurrences > 0 = Just (name ++ "-" ++ show occurrences)
@@ -73,7 +82,7 @@ nextId name (num, used) = (Id newName (num+1), (num+1, newUsed)) where
   newUsed
     | null name = used
     | otherwise = name : used
-  occurrences = length (filter (==name) used)
+  occurrences = length (filter (== name) used)
 
 -- | The initial ID source.
 initialIdSource :: IdSource
@@ -84,10 +93,10 @@ initialIdSource = IdSource (0, []) (0, []) (0, []) (0, [])
 
 -- | Check if a @ThreadAction@ immediately blocks.
 isBlock :: ThreadAction -> Bool
-isBlock (BlockedThrowTo  _) = True
+isBlock (BlockedThrowTo _) = True
 isBlock (BlockedTakeMVar _) = True
 isBlock (BlockedReadMVar _) = True
-isBlock (BlockedPutMVar  _) = True
+isBlock (BlockedPutMVar _) = True
 isBlock (BlockedSTM _) = True
 isBlock _ = False
 
@@ -102,12 +111,11 @@ tvarsWritten act = S.fromList $ case act of
   STM trc _ -> concatMap tvarsOf' trc
   BlockedSTM trc -> concatMap tvarsOf' trc
   _ -> []
-
-  where
-    tvarsOf' (TWrite tv) = [tv]
-    tvarsOf' (TOrElse ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
-    tvarsOf' (TCatch  ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
-    tvarsOf' _ = []
+ where
+  tvarsOf' (TWrite tv) = [tv]
+  tvarsOf' (TOrElse ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
+  tvarsOf' (TCatch ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
+  tvarsOf' _ = []
 
 -- | Get the @TVar@s a transaction read from.
 tvarsRead :: ThreadAction -> Set TVarId
@@ -115,12 +123,11 @@ tvarsRead act = S.fromList $ case act of
   STM trc _ -> concatMap tvarsOf' trc
   BlockedSTM trc -> concatMap tvarsOf' trc
   _ -> []
-
-  where
-    tvarsOf' (TRead tv) = [tv]
-    tvarsOf' (TOrElse ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
-    tvarsOf' (TCatch  ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
-    tvarsOf' _ = []
+ where
+  tvarsOf' (TRead tv) = [tv]
+  tvarsOf' (TOrElse ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
+  tvarsOf' (TCatch ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
+  tvarsOf' _ = []
 
 -- | Convert a 'ThreadAction' into a 'Lookahead': \"rewind\" what has
 -- happened. 'Killed' has no 'Lookahead' counterpart.
@@ -228,15 +235,15 @@ instance NFData ActionType where
 -- | Check if an action imposes a write barrier.
 isBarrier :: ActionType -> Bool
 isBarrier (SynchronisedModify _) = True
-isBarrier (SynchronisedRead   _) = True
-isBarrier (SynchronisedWrite  _) = True
+isBarrier (SynchronisedRead _) = True
+isBarrier (SynchronisedWrite _) = True
 isBarrier SynchronisedOther = True
 isBarrier _ = False
 
 -- | Check if an action commits a given 'CRef'.
 isCommit :: ActionType -> CRefId -> Bool
 isCommit (PartiallySynchronisedCommit c) r = c == r
-isCommit (PartiallySynchronisedWrite  c) r = c == r
+isCommit (PartiallySynchronisedWrite c) r = c == r
 isCommit (PartiallySynchronisedModify c) r = c == r
 isCommit _ _ = False
 
@@ -246,17 +253,17 @@ synchronises a r = isCommit a r || isBarrier a
 
 -- | Get the 'CRef' affected.
 crefOf :: ActionType -> Maybe CRefId
-crefOf (UnsynchronisedRead  r) = Just r
+crefOf (UnsynchronisedRead r) = Just r
 crefOf (UnsynchronisedWrite r) = Just r
-crefOf (SynchronisedModify  r) = Just r
+crefOf (SynchronisedModify r) = Just r
 crefOf (PartiallySynchronisedCommit r) = Just r
-crefOf (PartiallySynchronisedWrite  r) = Just r
+crefOf (PartiallySynchronisedWrite r) = Just r
 crefOf (PartiallySynchronisedModify r) = Just r
 crefOf _ = Nothing
 
 -- | Get the 'MVar' affected.
 mvarOf :: ActionType -> Maybe MVarId
-mvarOf (SynchronisedRead  c) = Just c
+mvarOf (SynchronisedRead c) = Just c
 mvarOf (SynchronisedWrite c) = Just c
 mvarOf _ = Nothing
 
@@ -270,20 +277,20 @@ simplifyAction = maybe UnsynchronisedOther simplifyLookahead . rewind
 
 -- | Variant of 'simplifyAction' that takes a 'Lookahead'.
 simplifyLookahead :: Lookahead -> ActionType
-simplifyLookahead (WillPutMVar c)     = SynchronisedWrite c
-simplifyLookahead (WillTryPutMVar c)  = SynchronisedWrite c
-simplifyLookahead (WillReadMVar c)    = SynchronisedRead c
+simplifyLookahead (WillPutMVar c) = SynchronisedWrite c
+simplifyLookahead (WillTryPutMVar c) = SynchronisedWrite c
+simplifyLookahead (WillReadMVar c) = SynchronisedRead c
 simplifyLookahead (WillTryReadMVar c) = SynchronisedRead c
-simplifyLookahead (WillTakeMVar c)    = SynchronisedRead c
-simplifyLookahead (WillTryTakeMVar c)  = SynchronisedRead c
-simplifyLookahead (WillReadCRef r)     = UnsynchronisedRead r
-simplifyLookahead (WillReadCRefCas r)  = UnsynchronisedRead r
-simplifyLookahead (WillModCRef r)      = SynchronisedModify r
-simplifyLookahead (WillModCRefCas r)   = PartiallySynchronisedModify r
-simplifyLookahead (WillWriteCRef r)    = UnsynchronisedWrite r
-simplifyLookahead (WillCasCRef r)      = PartiallySynchronisedWrite r
+simplifyLookahead (WillTakeMVar c) = SynchronisedRead c
+simplifyLookahead (WillTryTakeMVar c) = SynchronisedRead c
+simplifyLookahead (WillReadCRef r) = UnsynchronisedRead r
+simplifyLookahead (WillReadCRefCas r) = UnsynchronisedRead r
+simplifyLookahead (WillModCRef r) = SynchronisedModify r
+simplifyLookahead (WillModCRefCas r) = PartiallySynchronisedModify r
+simplifyLookahead (WillWriteCRef r) = UnsynchronisedWrite r
+simplifyLookahead (WillCasCRef r) = PartiallySynchronisedWrite r
 simplifyLookahead (WillCommitCRef _ r) = PartiallySynchronisedCommit r
-simplifyLookahead WillSTM         = SynchronisedOther
+simplifyLookahead WillSTM = SynchronisedOther
 simplifyLookahead (WillThrowTo _) = SynchronisedOther
 simplifyLookahead _ = UnsynchronisedOther
 
@@ -318,7 +325,7 @@ efromJust src _ = fatal src "fromJust: Nothing"
 -- | 'fromList' but with a better error message if it fails.  Use this
 -- only where it shouldn't fail!
 efromList :: String -> [a] -> NonEmpty a
-efromList _ (x:xs) = x:|xs
+efromList _ (x:xs) = x :| xs
 efromList src _ = fatal src "fromList: empty list"
 
 -- | 'error' but saying where it came from
@@ -331,7 +338,12 @@ fatal src msg = error ("(dejafu: " ++ src ++ ") " ++ msg)
 -- | Run with a continuation that writes its value into a reference,
 -- returning the computation and the reference.  Using the reference
 -- is non-blocking, it is up to you to ensure you wait sufficiently.
-runRefCont :: MonadRef r n => (n () -> x) -> (a -> Maybe b) -> ((a -> x) -> x) -> n (x, r (Maybe b))
+runRefCont
+  :: MonadRef r n
+  => (n () -> x)
+  -> (a -> Maybe b)
+  -> ((a -> x) -> x)
+  -> n (x, r (Maybe b))
 runRefCont act f k = do
   ref <- newRef Nothing
   let c = k (act . writeRef ref . f)

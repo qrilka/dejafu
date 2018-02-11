@@ -58,8 +58,11 @@ randSched weightf = Scheduler $ \_ threads s ->
     -- The weights, with any new threads added.
     (weights', g') = foldr assignWeight (M.empty, schedGen s) tids
     assignWeight tid ~(ws, g0) =
-      let (w, g) = maybe (weightf g0) (\w0 -> (w0, g0)) (M.lookup tid (schedWeights s))
-      in (M.insert tid w ws, g)
+      let
+        (w, g) =
+          maybe (weightf g0) (\w0 -> (w0, g0)) (M.lookup tid (schedWeights s))
+      in
+        (M.insert tid w ws, g)
 
     -- The runnable threads.
     tids = map fst (toList threads)

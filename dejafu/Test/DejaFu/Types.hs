@@ -499,10 +499,11 @@ instance NFData Discard where
 -- where the unit is @const (Just DiscardResultAndTrace)@.
 --
 -- @since 1.0.0.0
-weakenDiscard ::
-     (Either Failure a -> Maybe Discard)
+weakenDiscard
+  :: (Either Failure a -> Maybe Discard)
   -> (Either Failure a -> Maybe Discard)
-  -> Either Failure a -> Maybe Discard
+  -> Either Failure a
+  -> Maybe Discard
 weakenDiscard d1 d2 efa = case (d1 efa, d2 efa) of
   (Nothing, _) -> Nothing
   (_, Nothing) -> Nothing
@@ -517,10 +518,11 @@ weakenDiscard d1 d2 efa = case (d1 efa, d2 efa) of
 -- where the unit is @const Nothing@.
 --
 -- @since 1.0.0.0
-strengthenDiscard ::
-     (Either Failure a -> Maybe Discard)
+strengthenDiscard
+  :: (Either Failure a -> Maybe Discard)
   -> (Either Failure a -> Maybe Discard)
-  -> Either Failure a -> Maybe Discard
+  -> Either Failure a
+  -> Maybe Discard
 strengthenDiscard d1 d2 efa = case (d1 efa, d2 efa) of
   (Just DiscardResultAndTrace, _) -> Just DiscardResultAndTrace
   (_, Just DiscardResultAndTrace) -> Just DiscardResultAndTrace

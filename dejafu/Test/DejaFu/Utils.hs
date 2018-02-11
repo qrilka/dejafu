@@ -25,16 +25,18 @@ import           Test.DejaFu.Types
 --
 -- @since 0.5.0.0
 showTrace :: Trace -> String
-showTrace []  = "<trace discarded>"
-showTrace trc = intercalate "\n" $ go False trc : strkey where
-  go _ ((_,_,CommitCRef _ _):rest) = "C-" ++ go False rest
-  go _ ((Start    (ThreadId (Id _ i)),_,a):rest) = "S" ++ show i ++ "-" ++ go (didYield a) rest
-  go y ((SwitchTo (ThreadId (Id _ i)),_,a):rest) = (if y then "p" else "P") ++ show i ++ "-" ++ go (didYield a) rest
-  go _ ((Continue,_,a):rest) = '-' : go (didYield a) rest
+showTrace [] = "<trace discarded>"
+showTrace trc = intercalate "\n" $ go False trc : strkey
+ where
+  go _ ((_, _, CommitCRef _ _):rest) = "C-" ++ go False rest
+  go _ ((Start (ThreadId (Id _ i)), _, a):rest) =
+    "S" ++ show i ++ "-" ++ go (didYield a) rest
+  go y ((SwitchTo (ThreadId (Id _ i)), _, a):rest) =
+    (if y then "p" else "P") ++ show i ++ "-" ++ go (didYield a) rest
+  go _ ((Continue, _, a):rest) = '-' : go (didYield a) rest
   go _ _ = ""
 
-  strkey =
-    ["  " ++ show i ++ ": " ++ name | (i, name) <- threadNames trc]
+  strkey = [ "  " ++ show i ++ ": " ++ name | (i, name) <- threadNames trc ]
 
   didYield Yield = True
   didYield (ThreadDelay _) = True
@@ -44,19 +46,34 @@ showTrace trc = intercalate "\n" $ go False trc : strkey where
 --
 -- @since 0.7.3.0
 threadNames :: Trace -> [(Int, String)]
-threadNames = mapMaybe go where
-  go (_, _, Fork   (ThreadId (Id (Just name) i))) = Just (i, name)
+threadNames = mapMaybe go
+ where
+  go (_, _, Fork (ThreadId (Id (Just name) i))) = Just (i, name)
   go (_, _, ForkOS (ThreadId (Id (Just name) i))) = Just (i, name)
   go _ = Nothing
 
 -- | Find the \"simplest\" trace leading to each result.
 simplestsBy :: (x -> x -> Bool) -> [(x, Trace)] -> [(x, Trace)]
-simplestsBy f = map choose . collect where
-  collect = groupBy' [] (\(a,_) (b,_) -> f a b)
-  choose  = minimumBy . comparing $ \(_, trc) ->
-    let switchTos = length . filter (\(d,_,_) -> case d of SwitchTo _ -> True; _ -> False)
-        starts    = length . filter (\(d,_,_) -> case d of Start    _ -> True; _ -> False)
-        commits   = length . filter (\(_,_,a) -> case a of CommitCRef _ _ -> True; _ -> False)
+simplestsBy f = map choose . collect
+ where
+  collect = groupBy' [] (\(a, _) (b, _) -> f a b)
+  choose = minimumBy . comparing $ \(_, trc) ->
+    let
+      switchTos = length . filter
+        ( \(d, _, _) -> case d of
+          SwitchTo _ -> True
+          _ -> False
+        )
+      starts = length . filter
+        ( \(d, _, _) -> case d of
+          Start _ -> True
+          _ -> False
+        )
+      commits = length . filter
+        ( \(_, _, a) -> case a of
+          CommitCRef _ _ -> True
+          _ -> False
+        )
     in (switchTos trc, commits trc, length trc, starts trc)
 
   groupBy' res _ [] = res
@@ -64,7 +81,7 @@ simplestsBy f = map choose . collect where
 
   insert' _ x [] = [[x]]
   insert' eq x (ys@(y:_):yss)
-    | x `eq` y  = (x:ys) : yss
+    | x `eq` y = (x : ys) : yss
     | otherwise = ys : insert' eq x yss
   insert' _ _ ([]:_) = undefined
 
@@ -90,16 +107,17 @@ showFail IllegalSubconcurrency = "[illegal-subconcurrency]"
 --
 -- @since 0.5.0.0
 tidOf :: ThreadId -> Decision -> ThreadId
-tidOf _ (Start t)    = t
+tidOf _ (Start t) = t
 tidOf _ (SwitchTo t) = t
-tidOf tid _          = tid
+tidOf tid _ = tid
 
 -- | Get the 'Decision' that would have resulted in this thread
 -- identifier, given a prior thread (if any) and collection of threads
 -- which are unblocked at this point.
 --
 -- @since 0.5.0.0
-decisionOf :: Foldable f
+decisionOf
+  :: Foldable f
   => Maybe ThreadId
   -- ^ The prior thread.
   -> f ThreadId

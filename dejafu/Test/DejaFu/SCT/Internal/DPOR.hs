@@ -100,11 +100,11 @@ instance NFData BacktrackStep where
 initialState :: DPOR
 initialState = DPOR
   { dporRunnable = S.singleton initialThread
-  , dporTodo     = M.singleton initialThread False
-  , dporNext     = Nothing
-  , dporDone     = S.empty
-  , dporSleep    = M.empty
-  , dporTaken    = M.empty
+  , dporTodo = M.singleton initialThread False
+  , dporNext = Nothing
+  , dporDone = S.empty
+  , dporSleep = M.empty
+  , dporTaken = M.empty
   }
 
 -- | Produce a new schedule prefix from a @DPOR@ tree. If there are no new
@@ -117,24 +117,25 @@ initialState = DPOR
 -- to-do set. The intent is to put the system into a new state when
 -- executed with this initial sequence of scheduling decisions.
 findSchedulePrefix
-  :: DPOR
-  -> Maybe ([ThreadId], Bool, Map ThreadId ThreadAction)
+  :: DPOR -> Maybe ([ThreadId], Bool, Map ThreadId ThreadAction)
 findSchedulePrefix dpor = case dporNext dpor of
-    Just (tid, child) -> go tid child <|> here
-    Nothing -> here
-  where
-    go tid child = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> findSchedulePrefix child
+  Just (tid, child) -> go tid child <|> here
+  Nothing -> here
+ where
+  go tid child =
+    (\(ts, c, slp) -> (tid : ts, c, slp)) <$> findSchedulePrefix child
 
-    -- Prefix traces terminating with a to-do decision at this point.
-    here =
-      let todos = [([t], c, sleeps) | (t, c) <- M.toList $ dporTodo dpor]
-          (best, worst) = partition (\([t],_,_) -> t >= initialThread) todos
-      in listToMaybe best <|> listToMaybe worst
+  -- Prefix traces terminating with a to-do decision at this point.
+  here =
+    let
+      todos = [ ([t], c, sleeps) | (t, c) <- M.toList $ dporTodo dpor ]
+      (best, worst) = partition (\([t], _, _) -> t >= initialThread) todos
+    in listToMaybe best <|> listToMaybe worst
 
-    -- The new sleep set is the union of the sleep set of the node
-    -- we're branching from, plus all the decisions we've already
-    -- explored.
-    sleeps = dporSleep dpor `M.union` dporTaken dpor
+  -- The new sleep set is the union of the sleep set of the node
+  -- we're branching from, plus all the decisions we've already
+  -- explored.
+  sleeps = dporSleep dpor `M.union` dporTaken dpor
 
 -- | Add a new trace to the stack.  This won't work if to-dos aren't explored depth-first.
 incorporateTrace
@@ -146,49 +147,71 @@ incorporateTrace
   -- and the action performed.
   -> DPOR
   -> DPOR
-incorporateTrace conservative trace dpor0 = grow initialDepState (initialDPORThread dpor0) trace dpor0 where
+incorporateTrace conservative trace dpor0 = grow
+  initialDepState
+  (initialDPORThread dpor0)
+  trace
+  dpor0
+ where
   grow state tid trc@((d, _, a):rest) dpor =
-    let tid'   = tidOf tid d
-        state' = updateDepState state tid' a
+    let
+      tid' = tidOf tid d
+      state' = updateDepState state tid' a
     in case dporNext dpor of
-         Just (t, child)
-           | t == tid'      -> dpor { dporNext = Just (tid', grow state' tid' rest child) }
-           | hasTodos child -> fatal "incorporateTrace" "replacing child with todos!"
-         _ ->
-           let taken = M.insert tid' a (dporTaken dpor)
-               sleep = dporSleep dpor `M.union` dporTaken dpor
-           in dpor { dporTaken = if conservative then dporTaken dpor else taken
-                   , dporTodo  = M.delete tid' (dporTodo dpor)
-                   , dporNext  = Just (tid', subtree state' tid' sleep trc)
-                   , dporDone  = S.insert tid' (dporDone dpor)
-                   }
-  grow _ _ [] _ = fatal "incorporateTrace" "trace exhausted without reading a to-do point!"
+      Just (t, child)
+        | t == tid' -> dpor
+          { dporNext = Just (tid', grow state' tid' rest child)
+          }
+        | hasTodos child -> fatal
+          "incorporateTrace"
+          "replacing child with todos!"
+      _ ->
+        let
+          taken = M.insert tid' a (dporTaken dpor)
+          sleep = dporSleep dpor `M.union` dporTaken dpor
+        in dpor
+          { dporTaken = if conservative then dporTaken dpor else taken
+          , dporTodo = M.delete tid' (dporTodo dpor)
+          , dporNext = Just (tid', subtree state' tid' sleep trc)
+          , dporDone = S.insert tid' (dporDone dpor)
+          }
+  grow _ _ [] _ =
+    fatal "incorporateTrace" "trace exhausted without reading a to-do point!"
 
   -- check if there are to-do points in a tree
-  hasTodos dpor = not (M.null (dporTodo dpor)) || (case dporNext dpor of Just (_, dpor') -> hasTodos dpor'; _ -> False)
+  hasTodos dpor =
+    not (M.null (dporTodo dpor))
+      || ( case dporNext dpor of
+           Just (_, dpor') -> hasTodos dpor'
+           _ -> False
+         )
 
   -- Construct a new subtree corresponding to a trace suffix.
   subtree state tid sleep ((_, _, a):rest) =
-    let state' = updateDepState state tid a
-        sleep' = M.filterWithKey (\t a' -> not $ dependent state' tid a t a') sleep
+    let
+      state' = updateDepState state tid a
+      sleep' =
+        M.filterWithKey (\t a' -> not $ dependent state' tid a t a') sleep
     in DPOR
-        { dporRunnable = S.fromList $ case rest of
-            ((_, runnable, _):_) -> map fst runnable
-            [] -> []
-        , dporTodo = M.empty
-        , dporNext = case rest of
-          ((d', _, _):_) ->
-            let tid' = tidOf tid d'
-            in  Just (tid', subtree state' tid' sleep' rest)
-          [] -> Nothing
-        , dporDone = case rest of
-            ((d', _, _):_) -> S.singleton (tidOf tid d')
-            [] -> S.empty
-        , dporSleep = sleep'
-        , dporTaken = case rest of
-          ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
-          [] -> M.empty
-        }
+      { dporRunnable = S.fromList $ case rest of
+        ((_, runnable, _):_) -> map fst runnable
+        [] -> []
+      , dporTodo = M.empty
+      , dporNext = case rest of
+        ((d', _, _):_) ->
+          let
+            tid' = tidOf tid d'
+          in
+            Just (tid', subtree state' tid' sleep' rest)
+        [] -> Nothing
+      , dporDone = case rest of
+        ((d', _, _):_) -> S.singleton (tidOf tid d')
+        [] -> S.empty
+      , dporSleep = sleep'
+      , dporTaken = case rest of
+        ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
+        [] -> M.empty
+      }
   subtree _ _ _ [] = fatal "incorporateTrace" "subtree suffix empty!"
 
 -- | Produce a list of new backtracking points from an execution
@@ -220,71 +243,88 @@ findBacktrackSteps
   -> Trace
   -- ^ The execution trace.
   -> [BacktrackStep]
-findBacktrackSteps backtrack boundKill = go initialDepState S.empty initialThread [] . F.toList where
+findBacktrackSteps backtrack boundKill =
+  go initialDepState S.empty initialThread [] . F.toList
+ where
   -- Walk through the traces one step at a time, building up a list of
   -- new backtracking points.
-  go state allThreads tid bs ((e,i):is) ((d,_,a):ts) =
-    let tid' = tidOf tid d
-        state' = updateDepState state tid' a
-        this = BacktrackStep
-          { bcktThreadid   = tid'
-          , bcktDecision   = d
-          , bcktAction     = a
-          , bcktRunnable   = M.fromList e
-          , bcktBacktracks = M.fromList $ map (\i' -> (i', False)) i
-          , bcktState      = state
-          }
-        bs' = doBacktrack killsEarly allThreads' e (bs++[this])
-        runnable = S.fromList (M.keys $ bcktRunnable this)
-        allThreads' = allThreads `S.union` runnable
-        killsEarly = null ts && boundKill
+  go state allThreads tid bs ((e, i):is) ((d, _, a):ts) =
+    let
+      tid' = tidOf tid d
+      state' = updateDepState state tid' a
+      this = BacktrackStep
+        { bcktThreadid = tid'
+        , bcktDecision = d
+        , bcktAction = a
+        , bcktRunnable = M.fromList e
+        , bcktBacktracks = M.fromList $ map (\i' -> (i', False)) i
+        , bcktState = state
+        }
+      bs' = doBacktrack killsEarly allThreads' e (bs ++ [this])
+      runnable = S.fromList (M.keys $ bcktRunnable this)
+      allThreads' = allThreads `S.union` runnable
+      killsEarly = null ts && boundKill
     in go state' allThreads' tid' bs' is ts
   go _ _ _ bs _ _ = bs
 
   -- Find the prior actions dependent with this one and add
   -- backtracking points.
   doBacktrack killsEarly allThreads enabledThreads bs =
-    let tagged = reverse $ zip [0..] bs
-        idxs   = [ (ehead "doBacktrack.idxs" is, False, u)
-                 | (u, n) <- enabledThreads
-                 , v <- S.toList allThreads
-                 , u /= v
-                 , let is = idxs' u n v tagged
-                 , not $ null is]
+    let
+      tagged = reverse $ zip [0 ..] bs
+      idxs =
+        [ (ehead "doBacktrack.idxs" is, False, u)
+        | (u, n) <- enabledThreads
+        , v <- S.toList allThreads
+        , u /= v
+        , let is = idxs' u n v tagged
+        , not $ null is
+        ]
 
-        idxs' u n v = go' True where
-          {-# INLINE go' #-}
-          go' final ((i,b):rest)
-            -- Don't cross subconcurrency boundaries
-            | isSubC final b = []
-            -- If this is the final action in the trace and the
-            -- execution was killed due to nothing being within bounds
-            -- (@killsEarly == True@) assume worst-case dependency.
-            | bcktThreadid b == v && (killsEarly || isDependent b) = i : go' False rest
-            | otherwise = go' False rest
-          go' _ [] = []
+      idxs' u n v = go' True
+       where
+        {-# INLINE go' #-}
+        go' final ((i, b):rest)
+          |
+          -- Don't cross subconcurrency boundaries
+            isSubC final b = []
+          |
+          -- If this is the final action in the trace and the
+          -- execution was killed due to nothing being within bounds
+          -- (@killsEarly == True@) assume worst-case dependency.
+            bcktThreadid b == v && (killsEarly || isDependent b) = i
+          : go' False rest
+          | otherwise = go' False rest
+        go' _ [] = []
 
-          {-# INLINE isSubC #-}
-          isSubC final b = case bcktAction b of
-            Stop -> not final && bcktThreadid b == initialThread
-            Subconcurrency -> bcktThreadid b == initialThread
-            _ -> False
+        {-# INLINE isSubC #-}
+        isSubC final b = case bcktAction b of
+          Stop -> not final && bcktThreadid b == initialThread
+          Subconcurrency -> bcktThreadid b == initialThread
+          _ -> False
 
-          {-# INLINE isDependent #-}
-          isDependent b
-            -- Don't impose a dependency if the other thread will
-            -- immediately block already. This is safe because a
-            -- context switch will occur anyway so there's no point
-            -- pre-empting the action UNLESS the pre-emption would
-            -- possibly allow for a different relaxed memory stage.
-            | isBlock (bcktAction b) && isBarrier (simplifyLookahead n) = False
-            | otherwise = dependent' (bcktState b) (bcktThreadid b) (bcktAction b) u n
+        {-# INLINE isDependent #-}
+        isDependent b
+          |
+          -- Don't impose a dependency if the other thread will
+          -- immediately block already. This is safe because a
+          -- context switch will occur anyway so there's no point
+          -- pre-empting the action UNLESS the pre-emption would
+          -- possibly allow for a different relaxed memory stage.
+            isBlock (bcktAction b) && isBarrier (simplifyLookahead n) = False
+          | otherwise = dependent'
+            (bcktState b)
+            (bcktThreadid b)
+            (bcktAction b)
+            u
+            n
     in backtrack bs idxs
 
 -- | Add new backtracking points, if they have not already been
 -- visited and aren't in the sleep set.
 incorporateBacktrackSteps :: [BacktrackStep] -> DPOR -> DPOR
-incorporateBacktrackSteps (b:bs) dpor = dpor' where
+incorporateBacktrackSteps (b:bs) dpor = dpor'
+ where
   tid = bcktThreadid b
 
   dpor' = dpor
@@ -294,7 +334,7 @@ incorporateBacktrackSteps (b:bs) dpor = dpor' where
 
   todo =
     [ x
-    | x@(t,c) <- M.toList $ bcktBacktracks b
+    | x@(t, c) <- M.toList $ bcktBacktracks b
     , Just t /= (fst <$> dporNext dpor)
     , S.notMember t (dporDone dpor)
     , c || M.notMember t (dporSleep dpor)
@@ -302,7 +342,9 @@ incorporateBacktrackSteps (b:bs) dpor = dpor' where
 
   child = case dporNext dpor of
     Just (t, d)
-      | t /= tid -> fatal "incorporateBacktrackSteps" "incorporating wrong trace!"
+      | t /= tid -> fatal
+        "incorporateBacktrackSteps"
+        "incorporating wrong trace!"
       | otherwise -> incorporateBacktrackSteps bs d
     Nothing -> fatal "incorporateBacktrackSteps" "child is missing!"
 incorporateBacktrackSteps [] dpor = dpor
@@ -346,19 +388,20 @@ instance NFData k => NFData (DPORSchedState k) where
               )
 
 -- | Initial DPOR scheduler state for a given prefix
-initialDPORSchedState :: Map ThreadId ThreadAction
+initialDPORSchedState
+  :: Map ThreadId ThreadAction
   -- ^ The initial sleep set.
   -> [ThreadId]
   -- ^ The schedule prefix.
   -> DPORSchedState k
 initialDPORSchedState sleep prefix = DPORSchedState
-  { schedSleep     = sleep
-  , schedPrefix    = prefix
-  , schedBPoints   = Sq.empty
-  , schedIgnore    = False
+  { schedSleep = sleep
+  , schedPrefix = prefix
+  , schedBPoints = Sq.empty
+  , schedIgnore = False
   , schedBoundKill = False
-  , schedDepState  = initialDepState
-  , schedBState    = Nothing
+  , schedDepState = initialDepState
+  , schedBState = Nothing
   }
 
 -- | An incremental bounding function is a stateful function that
@@ -392,32 +435,39 @@ backtrackAt
   -- ^ If this returns @True@, backtrack to all runnable threads,
   -- rather than just the given thread.
   -> BacktrackFunc
-backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' where
-  fst' (x,_,_) = x
+backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst'
+ where
+  fst' (x, _, _) = x
 
-  backtrackAt' ((i,c,t):is) = go i bs0 i c t is
+  backtrackAt' ((i, c, t):is) = go i bs0 i c t is
   backtrackAt' [] = bs0
 
   go i0 (b:bs) 0 c tid is
+    |
     -- If the backtracking point is already present, don't re-add it,
     -- UNLESS this would force it to backtrack (it's conservative)
     -- where before it might not.
-    | not (toAll tid b) && tid `M.member` bcktRunnable b =
-      let val = M.lookup tid $ bcktBacktracks b
-          b' = if isNothing val || (val == Just False && c)
-            then b { bcktBacktracks = backtrackTo tid c b }
-            else b
+      not (toAll tid b) && tid `M.member` bcktRunnable b
+    = let
+        val = M.lookup tid $ bcktBacktracks b
+        b' = if isNothing val || (val == Just False && c)
+          then b { bcktBacktracks = backtrackTo tid c b }
+          else b
       in b' : case is of
-        ((i',c',t'):is') -> go i' bs (i'-i0-1) c' t' is'
+        ((i', c', t'):is') -> go i' bs (i' - i0 - 1) c' t' is'
         [] -> bs
+    |
     -- Otherwise just backtrack to everything runnable.
-    | otherwise =
-      let b' = b { bcktBacktracks = backtrackAll c b }
-      in b' : case is of
-        ((i',c',t'):is') -> go i' bs (i'-i0-1) c' t' is'
-        [] -> bs
-  go i0 (b:bs) i c tid is = b : go i0 bs (i-1) c tid is
-  go _ [] _ _ _ _ = fatal "backtrackAt" "ran out of schedule whilst backtracking!"
+      otherwise
+    = let
+        b' = b { bcktBacktracks = backtrackAll c b }
+      in
+        b' : case is of
+          ((i', c', t'):is') -> go i' bs (i' - i0 - 1) c' t' is'
+          [] -> bs
+  go i0 (b:bs) i c tid is = b : go i0 bs (i - 1) c tid is
+  go _ [] _ _ _ _ =
+    fatal "backtrackAt" "ran out of schedule whilst backtracking!"
 
   -- Backtrack to a single thread
   backtrackTo tid c = M.insert tid c . bcktBacktracks
@@ -442,17 +492,18 @@ dporSched boundf = Scheduler $ \prior threads s ->
   let
     -- The next scheduler state
     nextState rest = s
-      { schedBPoints  = schedBPoints s |> (restrictToBound fst threads', rest)
+      { schedBPoints = schedBPoints s |> (restrictToBound fst threads', rest)
       , schedDepState = nextDepState
       }
-    nextDepState = let ds = schedDepState s in maybe ds (uncurry $ updateDepState ds) prior
+    nextDepState =
+      let ds = schedDepState s in maybe ds (uncurry $ updateDepState ds) prior
 
     -- Pick a new thread to run, not considering bounds. Choose the
     -- current thread if available and it hasn't just yielded,
     -- otherwise add all runnable threads.
     initialise = tryDaemons . yieldsToEnd $ case prior of
-      Just (tid, act)
-        | not (didYield act) && tid `elem` tids && isInBound tid -> [tid]
+      Just (tid, act) | not (didYield act) && tid `elem` tids && isInBound tid -> [ tid
+                                                                                  ]
       _ -> tids
 
     -- If one of the chosen actions will kill the computation, and
@@ -478,7 +529,7 @@ dporSched boundf = Scheduler $ \prior threads s ->
     -- issue #52.
     tryDaemons ts
       | any doesKill ts = case partition doesKill tids of
-          (kills, nokills) -> nokills ++ kills
+        (kills, nokills) -> nokills ++ kills
       | otherwise = ts
     doesKill t = killsDaemons t (action t)
 
@@ -504,27 +555,41 @@ dporSched boundf = Scheduler $ \prior threads s ->
   in case schedPrefix s of
     -- If there is a decision available, make it
     (t:ts) ->
-      let bstate' = boundf (schedBState s) prior (decision t, action t)
-      in (Just t, (nextState []) { schedPrefix = ts, schedBState = bstate' })
+      let
+        bstate' = boundf (schedBState s) prior (decision t, action t)
+      in
+        (Just t, (nextState []) { schedPrefix = ts, schedBState = bstate' })
 
     -- Otherwise query the initialise function for a list of possible
     -- choices, filter out anything in the sleep set, and make one of
     -- them arbitrarily (recording the others).
     [] ->
-      let choices  = restrictToBound id initialise
-          checkDep t a = case prior of
-            Just (tid, act) -> dependent (schedDepState s) tid act t a
-            Nothing -> False
-          ssleep'  = M.filterWithKey (\t a -> not $ checkDep t a) $ schedSleep s
-          choices' = filter (`notElem` M.keys ssleep') choices
-          signore' = not (null choices) && all (`elem` M.keys ssleep') choices
-          sbkill'  = not (null initialise) && null choices
+      let
+        choices = restrictToBound id initialise
+        checkDep t a = case prior of
+          Just (tid, act) -> dependent (schedDepState s) tid act t a
+          Nothing -> False
+        ssleep' = M.filterWithKey (\t a -> not $ checkDep t a) $ schedSleep s
+        choices' = filter (`notElem` M.keys ssleep') choices
+        signore' = not (null choices) && all (`elem` M.keys ssleep') choices
+        sbkill' = not (null initialise) && null choices
       in case choices' of
         (nextTid:rest) ->
-          let bstate' = boundf (schedBState s) prior (decision nextTid, action nextTid)
-          in (Just nextTid, (nextState rest) { schedSleep = ssleep', schedBState = bstate' })
+          let
+            bstate' =
+              boundf (schedBState s) prior (decision nextTid, action nextTid)
+          in
+            ( Just nextTid
+            , (nextState rest) { schedSleep = ssleep', schedBState = bstate' }
+            )
         [] ->
-          (Nothing, (nextState []) { schedIgnore = signore', schedBoundKill = sbkill', schedBState = Nothing })
+          ( Nothing
+          , (nextState [])
+            { schedIgnore = signore'
+            , schedBoundKill = sbkill'
+            , schedBState = Nothing
+            }
+          )
 
 -------------------------------------------------------------------------------
 -- * Dependency function
@@ -534,7 +599,8 @@ dporSched boundf = Scheduler $ \prior threads s ->
 -- This is basically the same as 'dependent'', but can make use of the
 -- additional information in a 'ThreadAction' to make better decisions
 -- in a few cases.
-dependent :: DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+dependent
+  :: DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
 dependent ds t1 a1 t2 a2 = case (a1, a2) of
   -- @SetNumCapabilities@ and @GetNumCapabilities@ are NOT dependent
   -- IF the value read is the same as the value written. 'dependent''
@@ -553,26 +619,26 @@ dependent ds t1 a1 t2 a2 = case (a1, a2) of
   -- Dependency of STM transactions can be /greatly/ improved here, as
   -- the 'Lookahead' does not know which @TVar@s will be touched, and
   -- so has to assume all transactions are dependent.
-  (STM _ _, STM _ _)           -> checkSTM
-  (STM _ _, BlockedSTM _)      -> checkSTM
-  (BlockedSTM _, STM _ _)      -> checkSTM
+  (STM _ _, STM _ _) -> checkSTM
+  (STM _ _, BlockedSTM _) -> checkSTM
+  (BlockedSTM _, STM _ _) -> checkSTM
   (BlockedSTM _, BlockedSTM _) -> checkSTM
 
   _ -> case (,) <$> rewind a1 <*> rewind a2 of
     Just (l1, l2) -> dependent' ds t1 a1 t2 l2 && dependent' ds t2 a2 t1 l1
     _ -> dependentActions ds (simplifyAction a1) (simplifyAction a2)
-
-  where
+ where
     -- STM actions A and B are dependent if A wrote to anything B
     -- touched, or vice versa.
-    checkSTM = checkSTM' a1 a2 || checkSTM' a2 a1
-    checkSTM' a b = not . S.null $ tvarsWritten a `S.intersection` tvarsOf b
+  checkSTM = checkSTM' a1 a2 || checkSTM' a2 a1
+  checkSTM' a b = not . S.null $ tvarsWritten a `S.intersection` tvarsOf b
 
 -- | Variant of 'dependent' to handle 'Lookahead'.
 --
 -- Termination of the initial thread is handled specially in the DPOR
 -- implementation.
-dependent' :: DepState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool
+dependent'
+  :: DepState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool
 dependent' ds t1 a1 t2 l2 = case (a1, l2) of
   -- Worst-case assumption: all IO is dependent.
   (LiftIO, WillLiftIO) -> True
@@ -583,8 +649,8 @@ dependent' ds t1 a1 t2 l2 = case (a1, l2) of
   -- normal termination of a thread: it doesn't make a difference.
   (ThrowTo t, WillStop) | t == t2 -> False
   (Stop, WillThrowTo t) | t == t1 -> False
-  (ThrowTo t, _)     | t == t2 -> canInterruptL ds t2 l2
-  (_, WillThrowTo t) | t == t1 -> canInterrupt  ds t1 a1
+  (ThrowTo t, _) | t == t2 -> canInterruptL ds t2 l2
+  (_, WillThrowTo t) | t == t1 -> canInterrupt ds t1 a1
 
   -- Another worst-case: assume all STM is dependent.
   (STM _ _, WillSTM) -> True
@@ -593,7 +659,7 @@ dependent' ds t1 a1 t2 l2 = case (a1, l2) of
   -- value set is not the same as the value that will be got, but we
   -- can't know that here. 'dependent' optimises this case.
   (GetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
-  (SetNumCapabilities _, WillGetNumCapabilities)   -> True
+  (SetNumCapabilities _, WillGetNumCapabilities) -> True
   (SetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
 
   _ -> dependentActions ds (simplifyAction a1) (simplifyLookahead l2)
@@ -606,18 +672,30 @@ dependentActions ds a1 a2 = case (a1, a2) of
   -- Unsynchronised reads and writes are always dependent, even under
   -- a relaxed memory model, as an unsynchronised write gives rise to
   -- a commit, which synchronises.
-  (UnsynchronisedRead          r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> a2 /= UnsynchronisedRead r1
-  (UnsynchronisedWrite         r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
-  (PartiallySynchronisedWrite  r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
-  (PartiallySynchronisedModify r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
-  (SynchronisedModify          r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
+  (UnsynchronisedRead r1, _) | same crefOf
+    && a2
+    /= PartiallySynchronisedCommit r1 -> a2 /= UnsynchronisedRead r1
+  (UnsynchronisedWrite r1, _) | same crefOf
+    && a2
+    /= PartiallySynchronisedCommit r1 -> True
+  (PartiallySynchronisedWrite r1, _) | same crefOf
+    && a2
+    /= PartiallySynchronisedCommit r1 -> True
+  (PartiallySynchronisedModify r1, _) | same crefOf
+    && a2
+    /= PartiallySynchronisedCommit r1 -> True
+  (SynchronisedModify r1, _) | same crefOf
+    && a2
+    /= PartiallySynchronisedCommit r1 -> True
 
   -- Unsynchronised writes and synchronisation where the buffer is not
   -- empty.
   --
   -- See [RMMVerification], lemma 5.25.
-  (UnsynchronisedWrite r1, PartiallySynchronisedCommit _) | same crefOf && isBuffered ds r1 -> False
-  (PartiallySynchronisedCommit _, UnsynchronisedWrite r2) | same crefOf && isBuffered ds r2 -> False
+  (UnsynchronisedWrite r1, PartiallySynchronisedCommit _) | same crefOf
+    && isBuffered ds r1 -> False
+  (PartiallySynchronisedCommit _, UnsynchronisedWrite r2) | same crefOf
+    && isBuffered ds r2 -> False
 
   -- Unsynchronised reads where a memory barrier would flush a
   -- buffered write
@@ -635,24 +713,25 @@ dependentActions ds a1 a2 = case (a1, a2) of
   -- Two @MVar@ puts are dependent if they're to the same empty
   -- @MVar@, and two takes are dependent if they're to the same full
   -- @MVar@.
-  (SynchronisedWrite v1, SynchronisedWrite v2) -> v1 == v2 && not (isFull ds v1)
-  (SynchronisedRead  v1, SynchronisedRead  v2) -> v1 == v2 && isFull ds v1
+  (SynchronisedWrite v1, SynchronisedWrite v2) ->
+    v1 == v2 && not (isFull ds v1)
+  (SynchronisedRead v1, SynchronisedRead v2) -> v1 == v2 && isFull ds v1
 
   (_, _) -> case getSame crefOf of
     -- Two actions on the same CRef where at least one is synchronised
     Just r -> synchronises a1 r || synchronises a2 r
     -- Two actions on the same MVar
     _ -> same mvarOf
+ where
+  same :: Eq a => (ActionType -> Maybe a) -> Bool
+  same = isJust . getSame
 
-  where
-    same :: Eq a => (ActionType -> Maybe a) -> Bool
-    same = isJust . getSame
-
-    getSame :: Eq a => (ActionType -> Maybe a) -> Maybe a
-    getSame f =
-      let f1 = f a1
-          f2 = f a2
-      in if f1 == f2 then f1 else Nothing
+  getSame :: Eq a => (ActionType -> Maybe a) -> Maybe a
+  getSame f =
+    let
+      f1 = f a1
+      f2 = f a2
+    in if f1 == f2 then f1 else Nothing
 
 -------------------------------------------------------------------------------
 -- ** Dependency function state
@@ -683,8 +762,8 @@ initialDepState = DepState M.empty S.empty M.empty
 -- happened.
 updateDepState :: DepState -> ThreadId -> ThreadAction -> DepState
 updateDepState depstate tid act = DepState
-  { depCRState   = updateCRState       act $ depCRState   depstate
-  , depMVState   = updateMVState       act $ depMVState   depstate
+  { depCRState = updateCRState act $ depCRState depstate
+  , depMVState = updateMVState act $ depMVState depstate
   , depMaskState = updateMaskState tid act $ depMaskState depstate
   }
 
@@ -692,7 +771,7 @@ updateDepState depstate tid act = DepState
 -- happened.
 updateCRState :: ThreadAction -> Map CRefId Bool -> Map CRefId Bool
 updateCRState (CommitCRef _ r) = M.delete r
-updateCRState (WriteCRef    r) = M.insert r True
+updateCRState (WriteCRef r) = M.insert r True
 updateCRState ta
   | isBarrier $ simplifyAction ta = const M.empty
   | otherwise = id
@@ -708,12 +787,16 @@ updateMVState _ = id
 
 -- | Update the thread masking state with the action that has just
 -- happened.
-updateMaskState :: ThreadId -> ThreadAction -> Map ThreadId MaskingState -> Map ThreadId MaskingState
+updateMaskState
+  :: ThreadId
+  -> ThreadAction
+  -> Map ThreadId MaskingState
+  -> Map ThreadId MaskingState
 updateMaskState tid (Fork tid2) = \masks -> case M.lookup tid masks of
   -- A thread inherits the masking state of its parent.
   Just ms -> M.insert tid2 ms masks
   Nothing -> masks
-updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
+updateMaskState tid (SetMasking _ ms) = M.insert tid ms
 updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
 updateMaskState _ _ = id
 
@@ -728,35 +811,41 @@ isFull depstate v = S.member v (depMVState depstate)
 -- | Check if an exception can interrupt a thread (action).
 canInterrupt :: DepState -> ThreadId -> ThreadAction -> Bool
 canInterrupt depstate tid act
+  |
   -- If masked interruptible, blocked actions can be interrupted.
-  | isMaskedInterruptible depstate tid = case act of
-    BlockedPutMVar  _ -> True
+    isMaskedInterruptible depstate tid = case act of
+    BlockedPutMVar _ -> True
     BlockedReadMVar _ -> True
     BlockedTakeMVar _ -> True
-    BlockedSTM      _ -> True
-    BlockedThrowTo  _ -> True
+    BlockedSTM _ -> True
+    BlockedThrowTo _ -> True
     _ -> False
+  |
   -- If masked uninterruptible, nothing can be.
-  | isMaskedUninterruptible depstate tid = False
+    isMaskedUninterruptible depstate tid = False
+  |
   -- If no mask, anything can be.
-  | otherwise = True
+    otherwise = True
 
 -- | Check if an exception can interrupt a thread (lookahead).
 canInterruptL :: DepState -> ThreadId -> Lookahead -> Bool
 canInterruptL depstate tid lh
+  |
   -- If masked interruptible, actions which can block may be
   -- interrupted.
-  | isMaskedInterruptible depstate tid = case lh of
-    WillPutMVar  _ -> True
+    isMaskedInterruptible depstate tid = case lh of
+    WillPutMVar _ -> True
     WillReadMVar _ -> True
     WillTakeMVar _ -> True
-    WillSTM        -> True
-    WillThrowTo  _ -> True
+    WillSTM -> True
+    WillThrowTo _ -> True
     _ -> False
+  |
   -- If masked uninterruptible, nothing can be.
-  | isMaskedUninterruptible depstate tid = False
+    isMaskedUninterruptible depstate tid = False
+  |
   -- If no mask, anything can be.
-  | otherwise = True
+    otherwise = True
 
 -- | Check if a thread is masked interruptible.
 isMaskedInterruptible :: DepState -> ThreadId -> Bool

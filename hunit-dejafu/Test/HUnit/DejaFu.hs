@@ -94,7 +94,7 @@ instance Assertable (Conc.ConcIO ()) where
 
 assertableP :: Predicate (Either HUnitFailure ())
 assertableP = alwaysTrue $ \case
-  Right (Left HUnitFailure {}) -> False
+  Right (Left HUnitFailure{}) -> False
   _ -> True
 
 
@@ -105,7 +105,8 @@ assertableP = alwaysTrue $ \case
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
 -- @since 1.0.0.0
-testAuto :: (Eq a, Show a)
+testAuto
+  :: (Eq a, Show a)
   => Conc.ConcIO a
   -- ^ The computation to test.
   -> Test
@@ -115,7 +116,8 @@ testAuto = testAutoWay defaultWay defaultMemType
 -- execution way and memory model.
 --
 -- @since 1.0.0.0
-testAutoWay :: (Eq a, Show a)
+testAutoWay
+  :: (Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -128,7 +130,7 @@ testAutoWay way memtype = testDejafusWay way memtype autocheckCases
 -- | Predicates for the various autocheck functions.
 autocheckCases :: Eq a => [(String, Predicate a)]
 autocheckCases =
-  [("Never Deadlocks", representative deadlocksNever)
+  [ ("Never Deadlocks", representative deadlocksNever)
   , ("No Exceptions", representative exceptionsNever)
   , ("Consistent Result", alwaysSame)
   ]
@@ -136,7 +138,8 @@ autocheckCases =
 -- | Check that a predicate holds.
 --
 -- @since 1.0.0.0
-testDejafu :: Show b
+testDejafu
+  :: Show b
   => String
   -- ^ The name of the test.
   -> ProPredicate a b
@@ -150,7 +153,8 @@ testDejafu = testDejafuWay defaultWay defaultMemType
 -- and a memory model.
 --
 -- @since 1.0.0.0
-testDejafuWay :: Show b
+testDejafuWay
+  :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -167,7 +171,8 @@ testDejafuWay = testDejafuDiscard (const Nothing)
 -- | Variant of 'testDejafuWay' which can selectively discard results.
 --
 -- @since 1.0.0.0
-testDejafuDiscard :: Show b
+testDejafuDiscard
+  :: Show b
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
@@ -189,7 +194,8 @@ testDejafuDiscard discard way memtype name test =
 -- running the concurrent computation many times for each predicate.
 --
 -- @since 1.0.0.0
-testDejafus :: Show b
+testDejafus
+  :: Show b
   => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
   -> Conc.ConcIO a
@@ -201,7 +207,8 @@ testDejafus = testDejafusWay defaultWay defaultMemType
 -- and a memory model.
 --
 -- @since 1.0.0.0
-testDejafusWay :: Show b
+testDejafusWay
+  :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -221,7 +228,8 @@ testDejafusWay = testconc (const Nothing)
 -- variable assignments.
 --
 -- @since 0.6.0.0
-testProperty :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+testProperty
+  :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
   => String
   -- ^ The name of the test.
   -> p
@@ -235,7 +243,8 @@ testProperty = testPropertyFor 10 100
 -- @n * m@.
 --
 -- @since 0.7.1.0
-testPropertyFor :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+testPropertyFor
+  :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
   => Int
   -- ^ The number of seed values to try.
   -> Int
@@ -252,7 +261,8 @@ testPropertyFor = testprop
 -- HUnit integration
 
 -- | Produce a HUnit 'Test' from a Deja Fu unit test.
-testconc :: Show b
+testconc
+  :: Show b
   => (Either Failure a -> Maybe Discard)
   -> Way
   -> MemType
@@ -261,25 +271,34 @@ testconc :: Show b
   -> Test
 testconc discard way memtype tests concio = case map toTest tests of
   [t] -> t
-  ts  -> TestList ts
-
-  where
-    toTest (name, p) = TestLabel name . TestCase $ do
-      let discarder = D.strengthenDiscard discard (pdiscard p)
-      traces <- SCT.runSCTDiscard discarder way memtype concio
-      assertString . showErr $ peval p traces
+  ts -> TestList ts
+ where
+  toTest (name, p) = TestLabel name . TestCase $ do
+    let discarder = D.strengthenDiscard discard (pdiscard p)
+    traces <- SCT.runSCTDiscard discarder way memtype concio
+    assertString . showErr $ peval p traces
 
 -- | Produce a HUnit 'Test' from a Deja Fu refinement property test.
-testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
-  => Int -> Int -> String -> p -> Test
+testprop
+  :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+  => Int
+  -> Int
+  -> String
+  -> p
+  -> Test
 testprop sn vn name p = TestLabel name . TestCase $ do
   ce <- R.checkFor sn vn p
   case ce of
     Just c -> assertFailure . init $ unlines
-      [ "*** Failure: " ++
-        (if null (R.failingArgs c) then "" else unwords (R.failingArgs c) ++ " ") ++
-        "(seed " ++ show (R.failingSeed c) ++ ")"
-      , "    left:  " ++ show (F.toList $ R.leftResults  c)
+      [ "*** Failure: "
+      ++ ( if null (R.failingArgs c)
+           then ""
+           else unwords (R.failingArgs c) ++ " "
+         )
+      ++ "(seed "
+      ++ show (R.failingSeed c)
+      ++ ")"
+      , "    left:  " ++ show (F.toList $ R.leftResults c)
       , "    right: " ++ show (F.toList $ R.rightResults c)
       ]
     Nothing -> pure ()
@@ -293,7 +312,8 @@ testprop sn vn name p = TestLabel name . TestCase $ do
 showErr :: Show a => Result a -> String
 showErr res
   | _pass res = ""
-  | otherwise = "Failed:\n" ++ msg ++ unlines failures ++ rest where
+  | otherwise = "Failed:\n" ++ msg ++ unlines failures ++ rest
+ where
 
   msg = if null (_failureMsg res) then "" else _failureMsg res ++ "\n"
 
@@ -306,9 +326,9 @@ showErr res
 -- | Check if a list has more than some number of elements.
 moreThan :: [a] -> Int -> Bool
 moreThan [] n = n < 0
-moreThan _ 0  = True
-moreThan (_:xs) n = moreThan xs (n-1)
+moreThan _ 0 = True
+moreThan (_:xs) n = moreThan xs (n - 1)
 
 -- | Indent every line of a string.
 indent :: String -> String
-indent = intercalate "\n" . map ('\t':) . lines
+indent = intercalate "\n" . map ('\t' :) . lines

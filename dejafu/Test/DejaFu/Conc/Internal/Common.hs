@@ -184,7 +184,8 @@ lookahead (AThrowTo tid _ _) = WillThrowTo tid
 lookahead (ACatching _ _ _) = WillCatching
 lookahead (APopCatching _) = WillPopCatching
 lookahead (AMasking ms _ _) = WillSetMasking False ms
-lookahead (AResetMask b1 b2 ms _) = (if b1 then WillSetMasking else WillResetMasking) b2 ms
+lookahead (AResetMask b1 b2 ms _) =
+  (if b1 then WillSetMasking else WillResetMasking) b2 ms
 lookahead (ALift _) = WillLiftIO
 lookahead (AYield _) = WillYield
 lookahead (ADelay n _) = WillThreadDelay n

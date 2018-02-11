@@ -277,7 +277,8 @@ data FailedProperty o x
 -- variable assignments.
 --
 -- @since 0.7.0.0
-check :: (Testable p, Listable (X p), Show (X p), Show (O p))
+check
+  :: (Testable p, Listable (X p), Show (X p), Show (O p))
   => p
   -- ^ The property to check.
   -> IO Bool
@@ -286,10 +287,12 @@ check p = do
   putStrLn $ case ce of
     Just NoExpectedFailure -> "*** Failure: passed, but expected failure."
     Just c -> init $ unlines
-      [ "*** Failure: " ++
-        (if null (failingArgs c) then "" else unwords (failingArgs c) ++ " ") ++
-        "(seed " ++ show (failingSeed c) ++ ")"
-      , "    left:  " ++ show (S.toList $ leftResults  c)
+      [ "*** Failure: "
+      ++ (if null (failingArgs c) then "" else unwords (failingArgs c) ++ " ")
+      ++ "(seed "
+      ++ show (failingSeed c)
+      ++ ")"
+      , "    left:  " ++ show (S.toList $ leftResults c)
       , "    right: " ++ show (S.toList $ rightResults c)
       ]
     Nothing -> "+++ OK"
@@ -299,7 +302,8 @@ check p = do
 -- counterexample.
 --
 -- @since 0.7.0.0
-check' :: (Testable p, Listable (X p))
+check'
+  :: (Testable p, Listable (X p))
   => p
   -- ^ The property to check.
   -> IO (Maybe (FailedProperty (O p) (X p)))
@@ -312,7 +316,8 @@ check' = checkFor 10 100
 -- @listToMaybe@ composed with @counterExamples@.
 --
 -- @since 0.7.0.0
-checkFor :: (Testable p, Listable (X p))
+checkFor
+  :: (Testable p, Listable (X p))
   => Int
   -- ^ Number of seed values per variable-assignment.
   -> Int
@@ -320,22 +325,23 @@ checkFor :: (Testable p, Listable (X p))
   -> p
   -- ^ The property to check.
   -> IO (Maybe (FailedProperty (O p) (X p)))
-checkFor sn vn p =  do
-    let seeds = take sn $ concat tiers
-    let cases = take vn $ concat (rpropTiers p)
-    go seeds cases
-  where
-    go seeds ((vs, p'):rest) = do
-      r <- checkWithSeeds seeds p'
-      case r of
-        Just cf -> pure (Just (cf vs))
-        Nothing -> go seeds rest
-    go _ [] = pure Nothing
+checkFor sn vn p = do
+  let seeds = take sn $ concat tiers
+  let cases = take vn $ concat (rpropTiers p)
+  go seeds cases
+ where
+  go seeds ((vs, p'):rest) = do
+    r <- checkWithSeeds seeds p'
+    case r of
+      Just cf -> pure (Just (cf vs))
+      Nothing -> go seeds rest
+  go _ [] = pure Nothing
 
 -- | Find all counterexamples up to a limit.
 --
 -- @since 0.7.0.0
-counterExamples :: (Testable p, Listable (X p))
+counterExamples
+  :: (Testable p, Listable (X p))
   => Int
   -- ^ Number of seed values per variable-assignment.
   -> Int
@@ -365,39 +371,43 @@ checkWithSeeds
   -- ^ The property to check.
   -> IO (Maybe ([String] -> FailedProperty o x))
 checkWithSeeds seeds (RP how l r) = case how of
-    Weak   -> go1 S.isSubsetOf seeds
-    Equiv  -> go1 (==)         seeds
-    Strict -> go2 Unknown      seeds
-  where
+  Weak -> go1 S.isSubsetOf seeds
+  Equiv -> go1 (==) seeds
+  Strict -> go2 Unknown seeds
+ where
     -- weak and equiv need every set of pairwise result-sets to match
     -- some predicate.
-    go1 f (x:xs) = do
-      lrs <- evalSigWithSeed l x
-      rrs <- evalSigWithSeed r x
-      if lrs `f` rrs
-        then go1 f xs
-        else pure (Just $ toCE x lrs rrs)
-    go1 _ [] = pure Nothing
+  go1 f (x:xs) = do
+    lrs <- evalSigWithSeed l x
+    rrs <- evalSigWithSeed r x
+    if lrs `f` rrs then go1 f xs else pure (Just $ toCE x lrs rrs)
+  go1 _ [] = pure Nothing
 
-    -- strict fails if (a) any left result-set is not a subset of the
-    -- corresponding right result-set, or (b) every left result-set is
-    -- equal to the corresponding right result-set
-    go2 eq (x:xs) = do
-      lrs <- evalSigWithSeed l x
-      rrs <- evalSigWithSeed r x
-      let ce = toCE x lrs rrs
-      if | lrs == rrs             -> go2 (case eq of Unknown -> Failing ce; _ -> eq) xs
-         | lrs `S.isSubsetOf` rrs -> go2 Refuted xs
-         | otherwise              -> pure (Just ce)
-    go2 (Failing cf) [] = pure (Just cf)
-    go2 _ [] = pure Nothing
+  -- strict fails if (a) any left result-set is not a subset of the
+  -- corresponding right result-set, or (b) every left result-set is
+  -- equal to the corresponding right result-set
+  go2 eq (x:xs) = do
+    lrs <- evalSigWithSeed l x
+    rrs <- evalSigWithSeed r x
+    let ce = toCE x lrs rrs
+    if
+      | lrs == rrs -> go2
+        ( case eq of
+          Unknown -> Failing ce
+          _ -> eq
+        )
+        xs
+      | lrs `S.isSubsetOf` rrs -> go2 Refuted xs
+      | otherwise -> pure (Just ce)
+  go2 (Failing cf) [] = pure (Just cf)
+  go2 _ [] = pure Nothing
 
-    toCE x lrs rrs args = CounterExample
-      { failingSeed  = x
-      , failingArgs  = args
-      , leftResults  = lrs
-      , rightResults = rrs
-      }
+  toCE x lrs rrs args = CounterExample
+    { failingSeed = x
+    , failingArgs = args
+    , leftResults = lrs
+    , rightResults = rrs
+    }
 checkWithSeeds seeds (Neg rp) = do
   r <- checkWithSeeds seeds rp
   pure $ case r of
@@ -405,10 +415,7 @@ checkWithSeeds seeds (Neg rp) = do
     Nothing -> Just (const NoExpectedFailure)
 
 -- | Evaluate a signature with a given seed value
-evalSigWithSeed :: Ord o
-  => Sig s o x
-  -> x
-  -> IO (Set (Maybe Failure, o))
+evalSigWithSeed :: Ord o => Sig s o x -> x -> IO (Set (Maybe Failure, o))
 evalSigWithSeed sig x = do
   results <- runSCT defaultWay defaultMemType $ do
     s <- initialise sig x

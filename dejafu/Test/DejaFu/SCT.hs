@@ -138,7 +138,8 @@ systematically = Systematic
 -- (unlike 'systematically' / 'sctBound').
 --
 -- @since 0.7.0.0
-randomly :: RandomGen g
+randomly
+  :: RandomGen g
   => g
   -- ^ The random generator to drive the scheduling.
   -> Int
@@ -155,7 +156,8 @@ randomly g lim = swarmy g lim 1
 -- find all distinct results (unlike 'systematically' / 'sctBound').
 --
 -- @since 0.7.0.0
-uniformly :: RandomGen g
+uniformly
+  :: RandomGen g
   => g
   -- ^ The random generator to drive the scheduling.
   -> Int
@@ -173,7 +175,8 @@ uniformly = Uniform
 -- find all distinct results (unlike 'systematically' / 'sctBound').
 --
 -- @since 0.7.0.0
-swarmy :: RandomGen g
+swarmy
+  :: RandomGen g
   => g
   -- ^ The random generator to drive the scheduling.
   -> Int
@@ -190,7 +193,8 @@ swarmy = Weighted
 -- found, is unspecified and may change between releases.
 --
 -- @since 1.0.0.0
-runSCT :: (MonadConc n, MonadRef r n)
+runSCT
+  :: (MonadConc n, MonadRef r n)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
@@ -203,7 +207,8 @@ runSCT = runSCTDiscard (const Nothing)
 -- | Return the set of results of a concurrent program.
 --
 -- @since 1.0.0.0
-resultsSet :: (MonadConc n, MonadRef r n, Ord a)
+resultsSet
+  :: (MonadConc n, MonadRef r n, Ord a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
@@ -219,7 +224,8 @@ resultsSet = resultsSetDiscard (const Nothing)
 -- found, is unspecified and may change between releases.
 --
 -- @since 1.0.0.0
-runSCTDiscard :: (MonadConc n, MonadRef r n)
+runSCTDiscard
+  :: (MonadConc n, MonadRef r n)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
@@ -229,14 +235,18 @@ runSCTDiscard :: (MonadConc n, MonadRef r n)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-runSCTDiscard discard (Systematic cb)      memtype = sctBoundDiscard discard memtype cb
-runSCTDiscard discard (Weighted g lim use) memtype = sctWeightedRandomDiscard discard memtype g lim use
-runSCTDiscard discard (Uniform  g lim)     memtype = sctUniformRandomDiscard  discard memtype g lim
+runSCTDiscard discard (Systematic cb) memtype =
+  sctBoundDiscard discard memtype cb
+runSCTDiscard discard (Weighted g lim use) memtype =
+  sctWeightedRandomDiscard discard memtype g lim use
+runSCTDiscard discard (Uniform g lim) memtype =
+  sctUniformRandomDiscard discard memtype g lim
 
 -- | A variant of 'resultsSet' which can selectively discard results.
 --
 -- @since 1.0.0.0
-resultsSetDiscard :: (MonadConc n, MonadRef r n, Ord a)
+resultsSetDiscard
+  :: (MonadConc n, MonadRef r n, Ord a)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.  Traces are always discarded.
   -> Way
@@ -247,8 +257,10 @@ resultsSetDiscard :: (MonadConc n, MonadRef r n, Ord a)
   -- ^ The computation to run many times.
   -> n (Set (Either Failure a))
 resultsSetDiscard discard way memtype conc =
-  let discard' efa = discard efa <|> Just DiscardTrace
-  in S.fromList . map fst <$> runSCTDiscard discard' way memtype conc
+  let
+    discard' efa = discard efa <|> Just DiscardTrace
+  in
+    S.fromList . map fst <$> runSCTDiscard discard' way memtype conc
 
 -- | A strict variant of 'runSCT'.
 --
@@ -259,8 +271,12 @@ resultsSetDiscard discard way memtype conc =
 -- found, is unspecified and may change between releases.
 --
 -- @since 1.0.0.0
-runSCT' :: (MonadConc n, MonadRef r n, NFData a)
-  => Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
+runSCT'
+  :: (MonadConc n, MonadRef r n, NFData a)
+  => Way
+  -> MemType
+  -> ConcT r n a
+  -> n [(Either Failure a, Trace)]
 runSCT' = runSCTDiscard' (const Nothing)
 
 -- | A strict variant of 'resultsSet'.
@@ -269,8 +285,12 @@ runSCT' = runSCTDiscard' (const Nothing)
 -- may be more efficient in some situations.
 --
 -- @since 1.0.0.0
-resultsSet' :: (MonadConc n, MonadRef r n, Ord a, NFData a)
-  => Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
+resultsSet'
+  :: (MonadConc n, MonadRef r n, Ord a, NFData a)
+  => Way
+  -> MemType
+  -> ConcT r n a
+  -> n (Set (Either Failure a))
 resultsSet' = resultsSetDiscard' (const Nothing)
 
 -- | A strict variant of 'runSCTDiscard'.
@@ -282,8 +302,13 @@ resultsSet' = resultsSetDiscard' (const Nothing)
 -- found, is unspecified and may change between releases.
 --
 -- @since 1.0.0.0
-runSCTDiscard' :: (MonadConc n, MonadRef r n, NFData a)
-  => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
+runSCTDiscard'
+  :: (MonadConc n, MonadRef r n, NFData a)
+  => (Either Failure a -> Maybe Discard)
+  -> Way
+  -> MemType
+  -> ConcT r n a
+  -> n [(Either Failure a, Trace)]
 runSCTDiscard' discard way memtype conc = do
   res <- runSCTDiscard discard way memtype conc
   rnf res `seq` pure res
@@ -294,8 +319,13 @@ runSCTDiscard' discard way memtype conc = do
 -- may be more efficient in some situations.
 --
 -- @since 1.0.0.0
-resultsSetDiscard' :: (MonadConc n, MonadRef r n, Ord a, NFData a)
-  => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
+resultsSetDiscard'
+  :: (MonadConc n, MonadRef r n, Ord a, NFData a)
+  => (Either Failure a -> Maybe Discard)
+  -> Way
+  -> MemType
+  -> ConcT r n a
+  -> n (Set (Either Failure a))
 resultsSetDiscard' discard way memtype conc = do
   res <- resultsSetDiscard discard way memtype conc
   rnf res `seq` pure res
@@ -323,18 +353,18 @@ instance NFData Bounds where
 --
 -- @since 0.3.0.0
 noBounds :: Bounds
-noBounds = Bounds
-  { boundPreemp = Nothing
-  , boundFair   = Nothing
-  , boundLength = Nothing
-  }
+noBounds =
+  Bounds {boundPreemp = Nothing, boundFair = Nothing, boundLength = Nothing}
 
 -- | Combination bound function
-cBound :: Bounds -> IncrementalBoundFunc ((Int, Maybe ThreadId), M.Map ThreadId Int, Int)
+cBound
+  :: Bounds
+  -> IncrementalBoundFunc ((Int, Maybe ThreadId), M.Map ThreadId Int, Int)
 cBound (Bounds pb fb lb) (Just (k1, k2, k3)) prior lh =
-  let k1' = maybe (\k _ _ -> k) pBound pb (Just k1) prior lh
-      k2' = maybe (\k _ _ -> k) fBound fb (Just k2) prior lh
-      k3' = maybe (\k _ _ -> k) lBound lb (Just k3) prior lh
+  let
+    k1' = maybe (\k _ _ -> k) pBound pb (Just k1) prior lh
+    k2' = maybe (\k _ _ -> k) fBound fb (Just k2) prior lh
+    k3' = maybe (\k _ _ -> k) lBound lb (Just k3) prior lh
   in (,,) <$> k1' <*> k2' <*> k3'
 cBound _ Nothing _ _ = Just ((0, Nothing), M.empty, 1)
 
@@ -371,27 +401,34 @@ instance NFData PreemptionBound where
 -- context switches to a commit thread.
 pBound :: PreemptionBound -> IncrementalBoundFunc (Int, Maybe ThreadId)
 pBound (PreemptionBound pb) k prior lhead =
-  let k'@(pcount, _) = preEmpCountInc (fromMaybe (0, Nothing) k) prior lhead
-  in if pcount <= pb then Just k' else Nothing
+  let
+    k'@(pcount, _) = preEmpCountInc (fromMaybe (0, Nothing) k) prior lhead
+  in
+    if pcount <= pb then Just k' else Nothing
 
 -- | Add a backtrack point, and also conservatively add one prior to
 -- the most recent transition before that point. This may result in
 -- the same state being reached multiple times, but is needed because
 -- of the artificial dependency imposed by the bound.
 pBacktrack :: BacktrackFunc
-pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
+pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative
+ where
   addConservative o@(i, _, tid) = o : case conservative i of
-    Just j  -> [(j, True, tid)]
+    Just j -> [(j, True, tid)]
     Nothing -> []
 
   -- index of conservative point
-  conservative i = go (reverse (take (i-1) bs)) (i-1) where
+  conservative i = go (reverse (take (i - 1) bs)) (i - 1)
+   where
     go _ (-1) = Nothing
     go (b1:rest@(b2:_)) j
-      | bcktThreadid b1 /= bcktThreadid b2
+      | bcktThreadid b1
+        /= bcktThreadid b2
         && not (isCommitRef $ bcktAction b1)
-        && not (isCommitRef $ bcktAction b2) = Just j
-      | otherwise = go rest (j-1)
+        && not (isCommitRef $ bcktAction b2)
+      = Just j
+      | otherwise
+      = go rest (j - 1)
     go _ _ = Nothing
 
 -------------------------------------------------------------------------------
@@ -415,17 +452,20 @@ instance NFData FairBound where
 -- | Fair bound function
 fBound :: FairBound -> IncrementalBoundFunc (M.Map ThreadId Int)
 fBound (FairBound fb) k prior lhead =
-  let k' = yieldCountInc (fromMaybe M.empty k) prior lhead
-  in if not (willYield (snd lhead)) || maxDiff (M.elems k') <= fb
-     then Just k'
-     else Nothing
+  let
+    k' = yieldCountInc (fromMaybe M.empty k) prior lhead
+  in
+    if not (willYield (snd lhead)) || maxDiff (M.elems k') <= fb
+      then Just k'
+      else Nothing
 
 -- | Add a backtrack point. If the thread doesn't exist or is blocked,
 -- or performs a release operation, add all unblocked threads.
 fBacktrack :: BacktrackFunc
-fBacktrack = backtrackAt check where
+fBacktrack = backtrackAt check
+  where
   -- True if a release operation is performed.
-  check t b = Just True == (willRelease <$> M.lookup t (bcktRunnable b))
+        check t b = Just True == (willRelease <$> M.lookup t (bcktRunnable b))
 
 -------------------------------------------------------------------------------
 -- Length bounding
@@ -445,8 +485,7 @@ instance NFData LengthBound where
 -- | Length bound function
 lBound :: LengthBound -> IncrementalBoundFunc Int
 lBound (LengthBound lb) len _ _ =
-  let len' = maybe 1 (+1) len
-  in if len' < lb then Just len' else Nothing
+  let len' = maybe 1 (+ 1) len in if len' < lb then Just len' else Nothing
 
 -- | Add a backtrack point. If the thread doesn't exist or is blocked,
 -- add all unblocked threads.
@@ -472,7 +511,8 @@ lBacktrack = backtrackAt (\_ _ -> False)
 -- found, is unspecified and may change between releases.
 --
 -- @since 1.0.0.0
-sctBound :: (MonadConc n, MonadRef r n)
+sctBound
+  :: (MonadConc n, MonadRef r n)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Bounds
@@ -488,7 +528,8 @@ sctBound = sctBoundDiscard (const Nothing)
 -- found, is unspecified and may change between releases.
 --
 -- @since 1.0.0.0
-sctBoundDiscard :: (MonadConc n, MonadRef r n)
+sctBoundDiscard
+  :: (MonadConc n, MonadRef r n)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
@@ -498,22 +539,25 @@ sctBoundDiscard :: (MonadConc n, MonadRef r n)
   -> ConcT r n a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
-sctBoundDiscard discard memtype cb conc = go initialState where
+sctBoundDiscard discard memtype cb conc = go initialState
+ where
   -- Repeatedly run the computation gathering all the results and
   -- traces into a list until there are no schedules remaining to try.
   go !dp = case findSchedulePrefix dp of
     Just (prefix, conservative, sleep) -> do
-      (res, s, trace) <- runConcurrent scheduler
-                                       memtype
-                                       (initialDPORSchedState sleep prefix)
-                                       conc
+      (res, s, trace) <- runConcurrent
+        scheduler
+        memtype
+        (initialDPORSchedState sleep prefix)
+        conc
 
       let bpoints = findBacktracks (schedBoundKill s) (schedBPoints s) trace
       let newDPOR = incorporateTrace conservative trace dp
 
       if schedIgnore s
         then go (force newDPOR)
-        else checkDiscard discard res trace $ go (force (incorporateBacktrackSteps bpoints newDPOR))
+        else checkDiscard discard res trace
+          $ go (force (incorporateBacktrackSteps bpoints newDPOR))
 
     Nothing -> pure []
 
@@ -531,7 +575,8 @@ sctBoundDiscard discard memtype cb conc = go initialState where
 -- This is not guaranteed to find all distinct results.
 --
 -- @since 1.0.0.0
-sctUniformRandom :: (MonadConc n, MonadRef r n, RandomGen g)
+sctUniformRandom
+  :: (MonadConc n, MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> g
@@ -549,7 +594,8 @@ sctUniformRandom = sctUniformRandomDiscard (const Nothing)
 -- This is not guaranteed to find all distinct results.
 --
 -- @since 1.0.0.0
-sctUniformRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
+sctUniformRandomDiscard
+  :: (MonadConc n, MonadRef r n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
@@ -561,14 +607,16 @@ sctUniformRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctUniformRandomDiscard discard memtype g0 lim0 conc = go g0 (max 0 lim0) where
+sctUniformRandomDiscard discard memtype g0 lim0 conc = go g0 (max 0 lim0)
+ where
   go _ 0 = pure []
   go g n = do
-    (res, s, trace) <- runConcurrent (randSched $ \g' -> (1, g'))
-                                     memtype
-                                     (initialRandSchedState Nothing g)
-                                     conc
-    checkDiscard discard res trace $ go (schedGen s) (n-1)
+    (res, s, trace) <- runConcurrent
+      (randSched $ \g' -> (1, g'))
+      memtype
+      (initialRandSchedState Nothing g)
+      conc
+    checkDiscard discard res trace $ go (schedGen s) (n - 1)
 
 -- | SCT via weighted random scheduling.
 --
@@ -578,7 +626,8 @@ sctUniformRandomDiscard discard memtype g0 lim0 conc = go g0 (max 0 lim0) where
 -- This is not guaranteed to find all distinct results.
 --
 -- @since 1.0.0.0
-sctWeightedRandom :: (MonadConc n, MonadRef r n, RandomGen g)
+sctWeightedRandom
+  :: (MonadConc n, MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> g
@@ -598,7 +647,8 @@ sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
 -- This is not guaranteed to find all distinct results.
 --
 -- @since 1.0.0.0
-sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
+sctWeightedRandomDiscard
+  :: (MonadConc n, MonadRef r n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
@@ -612,15 +662,22 @@ sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctWeightedRandomDiscard discard memtype g0 lim0 use0 conc = go g0 (max 0 lim0) (max 1 use0) M.empty where
+sctWeightedRandomDiscard discard memtype g0 lim0 use0 conc = go
+  g0
+  (max 0 lim0)
+  (max 1 use0)
+  M.empty
+ where
   go _ 0 _ _ = pure []
   go g n 0 _ = go g n (max 1 use0) M.empty
   go g n use ws = do
-    (res, s, trace) <- runConcurrent (randSched $ randomR (1, 50))
-                                     memtype
-                                     (initialRandSchedState (Just ws) g)
-                                     conc
-    checkDiscard discard res trace $ go (schedGen s) (n-1) (use-1) (schedWeights s)
+    (res, s, trace) <- runConcurrent
+      (randSched $ randomR (1, 50))
+      memtype
+      (initialRandSchedState (Just ws) g)
+      conc
+    checkDiscard discard res trace
+      $ go (schedGen s) (n - 1) (use - 1) (schedWeights s)
 
 -------------------------------------------------------------------------------
 -- Utilities
@@ -636,17 +693,20 @@ preEmpCountInc
   -- ^ What's coming up.
   -> (Int, Maybe ThreadId)
 preEmpCountInc (sofar, lastnoncommit) prior (d, _) = case (prior, d) of
-    (Just (tid, _),   Start    tnext) -> cswitch tid tnext False
-    (Just (tid, act), SwitchTo tnext) -> cswitch tid tnext (not (didYield act))
-    (_, Continue) -> (sofar, lastnoncommit)
-    (Nothing, _)  -> (sofar, lastnoncommit)
-  where
-    cswitch tid tnext isPreemptive
-      | isCommitThread tnext = (sofar, if isCommitThread tid then lastnoncommit else Just tid)
-      | isCommitThread tid   = (if lastnoncommit == Just tnext then sofar else sofar + 1, Nothing)
-      | otherwise = (if isPreemptive then sofar + 1 else sofar, Nothing)
+  (Just (tid, _), Start tnext) -> cswitch tid tnext False
+  (Just (tid, act), SwitchTo tnext) -> cswitch tid tnext (not (didYield act))
+  (_, Continue) -> (sofar, lastnoncommit)
+  (Nothing, _) -> (sofar, lastnoncommit)
+ where
+  cswitch tid tnext isPreemptive
+    | isCommitThread tnext
+    = (sofar, if isCommitThread tid then lastnoncommit else Just tid)
+    | isCommitThread tid
+    = (if lastnoncommit == Just tnext then sofar else sofar + 1, Nothing)
+    | otherwise
+    = (if isPreemptive then sofar + 1 else sofar, Nothing)
 
-    isCommitThread = (< initialThread)
+  isCommitThread = (< initialThread)
 
 -- | An incremental count of yields, going one step at a time.
 yieldCountInc
@@ -658,12 +718,12 @@ yieldCountInc
   -- ^ What's coming up.
   -> M.Map ThreadId Int
 yieldCountInc sofar prior (d, lnext) = case prior of
-    Just (tid, _) -> ycount (tidOf tid d)
-    Nothing       -> ycount initialThread
-  where
-    ycount tnext
-      | willYield lnext = M.alter (Just . maybe 1 (+1)) tnext sofar
-      | otherwise       = M.alter (Just . fromMaybe 0) tnext sofar
+  Just (tid, _) -> ycount (tidOf tid d)
+  Nothing -> ycount initialThread
+ where
+  ycount tnext
+    | willYield lnext = M.alter (Just . maybe 1 (+ 1)) tnext sofar
+    | otherwise = M.alter (Just . fromMaybe 0) tnext sofar
 
 -- | Determine if an action is a commit or not.
 isCommitRef :: ThreadAction -> Bool
@@ -672,16 +732,21 @@ isCommitRef _ = False
 
 -- | Get the maximum difference between two ints in a list.
 maxDiff :: [Int] -> Int
-maxDiff = go 0 where
-  go m (x:xs) =
-    let m' = m `max` foldl' (go' x) 0 xs
-    in go m' xs
+maxDiff = go 0
+ where
+  go m (x:xs) = let m' = m `max` foldl' (go' x) 0 xs in go m' xs
   go m [] = m
   go' x0 m x = m `max` abs (x0 - x)
 
 -- | Apply the discard function.
-checkDiscard :: Functor f => (a -> Maybe Discard) -> a -> [b] -> f [(a, [b])] -> f [(a, [b])]
+checkDiscard
+  :: Functor f
+  => (a -> Maybe Discard)
+  -> a
+  -> [b]
+  -> f [(a, [b])]
+  -> f [(a, [b])]
 checkDiscard discard res trace rest = case discard res of
   Just DiscardResultAndTrace -> rest
-  Just DiscardTrace -> ((res, []):) <$> rest
-  Nothing -> ((res, trace):) <$> rest
+  Just DiscardTrace -> ((res, []) :) <$> rest
+  Nothing -> ((res, trace) :) <$> rest

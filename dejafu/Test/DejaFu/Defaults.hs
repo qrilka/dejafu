@@ -37,7 +37,7 @@ defaultMemType = TotalStoreOrder
 defaultBounds :: Bounds
 defaultBounds = Bounds
   { boundPreemp = Just defaultPreemptionBound
-  , boundFair   = Just defaultFairBound
+  , boundFair = Just defaultFairBound
   , boundLength = Just defaultLengthBound
   }
 

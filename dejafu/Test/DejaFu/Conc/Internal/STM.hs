@@ -130,10 +130,8 @@ data Result a =
 
 -- | Run a transaction, returning the result and new initial 'TVarId'.
 -- If the transaction failed, any effects are undone.
-runTransaction :: MonadRef r n
-  => S n r a
-  -> IdSource
-  -> n (Result a, IdSource, [TAction])
+runTransaction
+  :: MonadRef r n => S n r a -> IdSource -> n (Result a, IdSource, [TAction])
 runTransaction ma tvid = do
   (res, _, tvid', trace) <- doTransaction ma tvid
   pure (res, tvid', trace)
@@ -142,98 +140,129 @@ runTransaction ma tvid = do
 --
 -- If the transaction fails, its effects will automatically be undone,
 -- so the undo action returned will be @pure ()@.
-doTransaction :: MonadRef r n
+doTransaction
+  :: MonadRef r n
   => S n r a
   -> IdSource
   -> n (Result a, n (), IdSource, [TAction])
 doTransaction ma idsource = do
   (c, ref) <- runRefCont SStop (Just . Right) (runSTM ma)
-  (idsource', undo, readen, written, trace) <- go ref c (pure ()) idsource [] [] []
+  (idsource', undo, readen, written, trace) <- go
+    ref
+    c
+    (pure ())
+    idsource
+    []
+    []
+    []
   res <- readRef ref
 
   case res of
-    Just (Right val) -> pure (Success (nub readen) (nub written) val, undo, idsource', reverse trace)
-    Just (Left  exc) -> undo >> pure (Exception exc,      pure (), idsource, reverse trace)
-    Nothing          -> undo >> pure (Retry $ nub readen, pure (), idsource, reverse trace)
+    Just (Right val) -> pure
+      (Success (nub readen) (nub written) val, undo, idsource', reverse trace)
+    Just (Left exc) ->
+      undo >> pure (Exception exc, pure (), idsource, reverse trace)
+    Nothing ->
+      undo >> pure (Retry $ nub readen, pure (), idsource, reverse trace)
+ where
+  go ref act undo nidsrc readen written sofar = do
+    (act', undo', nidsrc', readen', written', tact) <- stepTrans act nidsrc
 
-  where
-    go ref act undo nidsrc readen written sofar = do
-      (act', undo', nidsrc', readen', written', tact) <- stepTrans act nidsrc
+    let
+      newIDSource = nidsrc'
+      newAct = act'
+      newUndo = undo' >> undo
+      newReaden = readen' ++ readen
+      newWritten = written' ++ written
+      newSofar = tact : sofar
 
-      let newIDSource = nidsrc'
-          newAct = act'
-          newUndo = undo' >> undo
-          newReaden = readen' ++ readen
-          newWritten = written' ++ written
-          newSofar = tact : sofar
-
-      case tact of
-        TStop  -> pure (newIDSource, newUndo, newReaden, newWritten, TStop:newSofar)
-        TRetry -> do
-          writeRef ref Nothing
-          pure (newIDSource, newUndo, newReaden, newWritten, TRetry:newSofar)
-        TThrow -> do
-          writeRef ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
-          pure (newIDSource, newUndo, newReaden, newWritten, TThrow:newSofar)
-        _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
+    case tact of
+      TStop ->
+        pure (newIDSource, newUndo, newReaden, newWritten, TStop : newSofar)
+      TRetry -> do
+        writeRef ref Nothing
+        pure (newIDSource, newUndo, newReaden, newWritten, TRetry : newSofar)
+      TThrow -> do
+        writeRef
+          ref
+          ( Just . Left $ case act of
+            SThrow e -> toException e
+            _ -> undefined
+          )
+        pure (newIDSource, newUndo, newReaden, newWritten, TThrow : newSofar)
+      _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
 
 -- | Run a transaction for one step.
-stepTrans :: MonadRef r n
+stepTrans
+  :: MonadRef r n
   => STMAction n r
   -> IdSource
   -> n (STMAction n r, n (), IdSource, [TVarId], [TVarId], TAction)
 stepTrans act idsource = case act of
-  SCatch  h stm c -> stepCatch h stm c
-  SRead   ref c   -> stepRead ref c
-  SWrite  ref a c -> stepWrite ref a c
-  SNew    n a c   -> stepNew n a c
-  SOrElse a b c   -> stepOrElse a b c
-  SStop   na      -> stepStop na
+  SCatch h stm c -> stepCatch h stm c
+  SRead ref c -> stepRead ref c
+  SWrite ref a c -> stepWrite ref a c
+  SNew n a c -> stepNew n a c
+  SOrElse a b c -> stepOrElse a b c
+  SStop na -> stepStop na
 
   SThrow e -> pure (SThrow e, nothing, idsource, [], [], TThrow)
-  SRetry   -> pure (SRetry,   nothing, idsource, [], [], TRetry)
+  SRetry -> pure (SRetry, nothing, idsource, [], [], TRetry)
+ where
+  nothing = pure ()
 
-  where
-    nothing = pure ()
+  stepCatch h stm c = cases
+    TCatch
+    stm
+    c
+    (\trace -> pure (SRetry, nothing, idsource, [], [], TCatch trace Nothing))
+    ( \trace exc -> case fromException exc of
+      Just exc' -> transaction (TCatch trace . Just) (h exc') c
+      Nothing ->
+        pure (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing)
+    )
 
-    stepCatch h stm c = cases TCatch stm c
-      (\trace -> pure (SRetry, nothing, idsource, [], [], TCatch trace Nothing))
-      (\trace exc    -> case fromException exc of
-        Just exc' -> transaction (TCatch trace . Just) (h exc') c
-        Nothing   -> pure (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing))
+  stepRead (TVar (tvid, ref)) c = do
+    val <- readRef ref
+    pure (c val, nothing, idsource, [tvid], [], TRead tvid)
 
-    stepRead (TVar (tvid, ref)) c = do
-      val <- readRef ref
-      pure (c val, nothing, idsource, [tvid], [], TRead tvid)
+  stepWrite (TVar (tvid, ref)) a c = do
+    old <- readRef ref
+    writeRef ref a
+    pure (c, writeRef ref old, idsource, [], [tvid], TWrite tvid)
 
-    stepWrite (TVar (tvid, ref)) a c = do
-      old <- readRef ref
-      writeRef ref a
-      pure (c, writeRef ref old, idsource, [], [tvid], TWrite tvid)
+  stepNew n a c = do
+    let (idsource', tvid) = nextTVId n idsource
+    ref <- newRef a
+    let tvar = TVar (tvid, ref)
+    pure (c tvar, nothing, idsource', [], [tvid], TNew tvid)
 
-    stepNew n a c = do
-      let (idsource', tvid) = nextTVId n idsource
-      ref <- newRef a
-      let tvar = TVar (tvid, ref)
-      pure (c tvar, nothing, idsource', [], [tvid], TNew tvid)
+  stepOrElse a b c = cases
+    TOrElse
+    a
+    c
+    (\trace -> transaction (TOrElse trace . Just) b c)
+    ( \trace exc ->
+      pure (SThrow exc, nothing, idsource, [], [], TOrElse trace Nothing)
+    )
 
-    stepOrElse a b c = cases TOrElse a c
-      (\trace   -> transaction (TOrElse trace . Just) b c)
-      (\trace exc -> pure (SThrow exc, nothing, idsource, [], [], TOrElse trace Nothing))
+  stepStop na = do
+    na
+    pure (SStop na, nothing, idsource, [], [], TStop)
 
-    stepStop na = do
-      na
-      pure (SStop na, nothing, idsource, [], [], TStop)
+  cases tact stm onSuccess onRetry onException = do
+    (res, undo, idsource', trace) <- doTransaction stm idsource
+    case res of
+      Success readen written val -> pure
+        (onSuccess val, undo, idsource', readen, written, tact trace Nothing)
+      Retry readen -> do
+        (res', undo', idsource'', readen', written', trace') <- onRetry trace
+        pure (res', undo', idsource'', readen ++ readen', written', trace')
+      Exception exc -> onException trace exc
 
-    cases tact stm onSuccess onRetry onException = do
-      (res, undo, idsource', trace) <- doTransaction stm idsource
-      case res of
-        Success readen written val -> pure (onSuccess val, undo, idsource', readen, written, tact trace Nothing)
-        Retry readen -> do
-          (res', undo', idsource'', readen', written', trace') <- onRetry trace
-          pure (res', undo', idsource'', readen ++ readen', written', trace')
-        Exception exc -> onException trace exc
-
-    transaction tact stm onSuccess = cases (\t _ -> tact t) stm onSuccess
-      (\trace     -> pure (SRetry, nothing, idsource, [], [], tact trace))
-      (\trace exc -> pure (SThrow exc, nothing, idsource, [], [], tact trace))
+  transaction tact stm onSuccess = cases
+    (\t _ -> tact t)
+    stm
+    onSuccess
+    (\trace -> pure (SRetry, nothing, idsource, [], [], tact trace))
+    (\trace exc -> pure (SThrow exc, nothing, idsource, [], [], tact trace))
